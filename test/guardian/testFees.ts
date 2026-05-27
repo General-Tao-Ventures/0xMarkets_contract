@@ -351,6 +351,9 @@ describe("Guardian.Fees", () => {
     expect(user1BalAfter.sub(user1BalBefore)).to.eq(claimableUIFees);
   });
 
+  // TODO . Skipped until the assertion chain (every
+  // downstream balance / impact-pool value through line ~1160) can be recomputed. The
+  // PR author intentionally chose this over inline-rewriting to avoid hiding test intent.
   it.skip("Positive & negative impact fees for positions", async () => {
     // Set positive & negative position fee factor
     await dataStore.setUint(keys.positionFeeFactorKey(ethUsdMarket.marketToken, false), decimalToFloat(1, 3)); // 0.1%
