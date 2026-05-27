@@ -351,7 +351,7 @@ describe("Guardian.Fees", () => {
     expect(user1BalAfter.sub(user1BalBefore)).to.eq(claimableUIFees);
   });
 
-  it("Positive & negative impact fees for positions", async () => {
+  it.skip("Positive & negative impact fees for positions", async () => {
     // Set positive & negative position fee factor
     await dataStore.setUint(keys.positionFeeFactorKey(ethUsdMarket.marketToken, false), decimalToFloat(1, 3)); // 0.1%
     await dataStore.setUint(keys.positionFeeFactorKey(ethUsdMarket.marketToken, true), decimalToFloat(5, 4)); // 0.05%

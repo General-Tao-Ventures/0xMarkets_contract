@@ -372,10 +372,6 @@ const baseMarketConfig: Partial<BaseMarketConfig> = {
   positionImpactPoolDistributionRate: bigNumberify(0),
   minPositionImpactPoolAmount: 0,
 
-  // Liquidation fee = 100% of remaining MMR at max leverage (matches maxMmr = 20%).
-  // Static factor × sizeInUsd. For sub-max-leverage positions the fee exceeds
-  // available collateral at liquidation — covered by the proportional-receiver
-  // scaling in DecreasePositionCollateralUtils (insolvent-close fix).
   liquidationFeeFactor: percentageToFloat("20%"),
 
   // Insurance fund drawdown trigger: 2% of last epoch snapshot. When realized
