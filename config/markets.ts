@@ -303,18 +303,18 @@ const borrowingRateConfig_HighMax_WithHigherBase: BorrowingRateConfig = {
 const baseMarketConfig: Partial<BaseMarketConfig> = {
   // Dynamic MMR.
   //   formula: mmr = clamp((sizeInUsd/collateralUsd)/maxLeverage * mmrTuning, minMmr, maxMmr)
-  // Per Derek's clarification on the spec (MMR = 20% × IMR with IMR = 1/maxLev):
-  //   mmrTuning = 0.2 / maxLeverage   → MMR at max leverage = 20% of IMR
-  //   minMmr    = 1   / maxLeverage   → caps usable leverage at maxLev for the floor clamp
-  //   maxMmr    = 20%                 → safety ceiling, doesn't usually bind
-  // All three are coupled to maxLeverage. If you change maxLeverage you must
-  // restate mmrTuning and minMmr accordingly or positions at the cap revert.
+  //   liq check: remainingCollateralUsd < collateralUsd * mmr
+  // Since MMR multiplies the pre-PnL collateral (the IMR), the params are now
+  // leverage-independent and the same flat values work across all markets:
+  //   mmrTuning = 20%   → at max leverage, MMR = 20% of IMR (Ostium-style)
+  //   minMmr    = 1%    → floor at low leverage, lots of room before liq
+  //   maxMmr    = 20%   → safety ceiling
   // min_leverage is opt-in (0 = no lower bound). Set it per-market to enforce.
   maxLeverage: decimalToFloat(50), // conservative default for markets without an asset-class override
   minLeverage: 0,
-  minMmr: percentageToFloat("2%"), // 1 / 50x
+  minMmr: percentageToFloat("1%"),
   maxMmr: percentageToFloat("20%"),
-  mmrTuning: percentageToFloat("0.4%"), // 0.2 / 50x
+  mmrTuning: percentageToFloat("20%"),
 
   minCollateralFactorForOpenInterestMultiplier: 0,
 
@@ -435,9 +435,10 @@ const synthethicMarketConfig_IncreasedCapacity: Partial<BaseMarketConfig> = {
   maxPnlFactorForWithdrawals: percentageToFloat("55%"),
 };
 
-// Per Derek's clarification: mmrTuning = 0.2/maxLev (MMR at max lev = 20% × IMR),
-// minMmr = 1/maxLev (caps usable leverage at the market's maxLev), maxMmr = 20%
-// flat as a safety ceiling. All three scale per market with maxLeverage.
+// MMR params are leverage-independent under the collateralUsd × mmr liq formula,
+// so all asset classes share the same flat values (inherited from baseMarketConfig):
+// mmrTuning = 20%, minMmr = 1%, maxMmr = 20%. Per-market overrides only set
+// maxLeverage and the leverage ladder.
 
 const fxMarketOverrides: Partial<BaseMarketConfig> = {
   positionFeeFactorForPositiveImpact: percentageToFloat("0.01%"),
@@ -445,9 +446,6 @@ const fxMarketOverrides: Partial<BaseMarketConfig> = {
 
   maxLeverage: decimalToFloat(500),
   minLeverage: 0,
-  minMmr: percentageToFloat("0.2%"), // 1 / 500x
-  maxMmr: percentageToFloat("20%"),
-  mmrTuning: percentageToFloat("0.04%"), // 0.2 / 500x
 
   leverageLadder: fxLeverageLadder,
 };
@@ -458,9 +456,6 @@ const commodityMarketOverrides: Partial<BaseMarketConfig> = {
 
   maxLeverage: decimalToFloat(200),
   minLeverage: 0,
-  minMmr: percentageToFloat("0.5%"), // 1 / 200x
-  maxMmr: percentageToFloat("20%"),
-  mmrTuning: percentageToFloat("0.1%"), // 0.2 / 200x
 
   leverageLadder: goldLeverageLadder,
 };
@@ -471,9 +466,6 @@ const cryptoMarketOverrides: Partial<BaseMarketConfig> = {
 
   maxLeverage: decimalToFloat(100),
   minLeverage: 0,
-  minMmr: percentageToFloat("1%"), // 1 / 100x
-  maxMmr: percentageToFloat("20%"),
-  mmrTuning: percentageToFloat("0.2%"), // 0.2 / 100x
 
   leverageLadder: cryptoLeverageLadder,
 };
@@ -494,7 +486,7 @@ const hardhatBaseMarketConfig: Partial<BaseMarketConfig> = {
 
   // Dynamic MMR defaults for hardhat — 100x cap + 1% min_mmr give tests a flat 1%
   // effective MMR across all leverages (tuning 0.5% at max is below the floor).
-  // Prod markets (fx/commodity/crypto) use sub-floor tuning to expose the dynamic curve.
+  // Under the collateralUsd × mmr liq formula, requiredCollateralUsd = collateralUsd × 1%.
   // min_leverage stays 0 (opt-in); tests that want the lower-bound gate set it per-market.
   maxLeverage: decimalToFloat(100),
   minLeverage: 0,
