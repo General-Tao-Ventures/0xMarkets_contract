@@ -337,10 +337,19 @@ library DecreasePositionCollateralUtils {
                 fees.ui.uiFeeAmount,
                 Keys.UI_POSITION_FEE_TYPE
             );
+        } else if (collateralCache.result.remainingCostUsd > 0) {
+            _distributeInsolventShares(params, fees, collateralCache.result.amountPaidInCollateralToken);
+
+            if (collateralCache.result.amountPaidInSecondaryOutputToken > 0) {
+                MarketUtils.applyDeltaToPoolAmount(
+                    params.contracts.dataStore,
+                    params.contracts.eventEmitter,
+                    params.market,
+                    values.output.secondaryOutputToken,
+                    collateralCache.result.amountPaidInSecondaryOutputToken.toInt256()
+                );
+            }
         } else {
-            // the fees are expected to be paid in the collateral token
-            // if there are insufficient funds to pay for fees entirely in the collateral token
-            // then credit the fee amount entirely to the pool
             if (collateralCache.result.amountPaidInCollateralToken > 0) {
                 MarketUtils.applyDeltaToPoolAmount(
                     params.contracts.dataStore,
@@ -815,6 +824,82 @@ library DecreasePositionCollateralUtils {
                     fees.insuranceFeeAmount
                 );
             }
+        }
+    }
+
+    // @dev Insolvent / partial-payment fee distribution for the collateral-
+    // token portion of the recovered amount. Scales each receiver share by
+    //   scale = amountPaidInCollateralToken / totalCostAmountExcludingFunding
+    // (capped at 1.0) so the sum of distributed shares stays ≤ recovered.
+    //
+    // Mutates `fees` in place — handleEarlyReturn's PositionFeesInfo emit
+    // downstream will reflect the scaled values that were actually written.
+    function _distributeInsolventShares(
+        PositionUtils.UpdatePositionParams memory params,
+        PositionPricingUtils.PositionFees memory fees,
+        uint256 amountPaidInCollateralToken
+    ) internal {
+        if (amountPaidInCollateralToken == 0 || fees.totalCostAmountExcludingFunding == 0) {
+            // Nothing recovered or nothing owed — no scaled distribution.
+            // handleEarlyReturn will return getEmptyFees(fees) downstream.
+            return;
+        }
+
+        uint256 scale = Precision.toFactor(
+            amountPaidInCollateralToken,
+            fees.totalCostAmountExcludingFunding
+        );
+        if (scale > Precision.FLOAT_PRECISION) {
+            scale = Precision.FLOAT_PRECISION;
+        }
+
+        fees.feeAmountForPool = Precision.applyFactor(fees.feeAmountForPool, scale);
+        fees.veAlphaFeeAmount = Precision.applyFactor(fees.veAlphaFeeAmount, scale);
+        fees.treasuryFeeAmount = Precision.applyFactor(fees.treasuryFeeAmount, scale);
+        fees.buybackFeeAmount = Precision.applyFactor(fees.buybackFeeAmount, scale);
+        fees.validatorFeeAmount = Precision.applyFactor(fees.validatorFeeAmount, scale);
+        fees.insuranceFeeAmount = Precision.applyFactor(fees.insuranceFeeAmount, scale);
+        fees.ui.uiFeeAmount = Precision.applyFactor(fees.ui.uiFeeAmount, scale);
+        // Affiliate reward is part of totalCostAmountExcludingFunding too. Without
+        // scaling + crediting it here, the proportional portion of the recovered
+        // tokens that "belongs" to the affiliate would sit in the contract as
+        // orphan tokens (handleEarlyReturn zeros fees downstream, so handleReferral
+        // writes 0 to the affiliate). Pay it inside this function instead.
+        fees.referral.affiliateRewardAmount = Precision.applyFactor(fees.referral.affiliateRewardAmount, scale);
+
+        address collateralToken = params.position.collateralToken();
+
+        if (fees.feeAmountForPool > 0) {
+            MarketUtils.applyDeltaToPoolAmount(
+                params.contracts.dataStore,
+                params.contracts.eventEmitter,
+                params.market,
+                collateralToken,
+                fees.feeAmountForPool.toInt256()
+            );
+        }
+        _distributeTransactionShares(params, fees, collateralToken);
+        _distributeLiquidationShares(params, fees, collateralToken);
+        if (fees.ui.uiFeeAmount > 0) {
+            FeeUtils.incrementClaimableUiFeeAmount(
+                params.contracts.dataStore,
+                params.contracts.eventEmitter,
+                params.order.uiFeeReceiver(),
+                params.market.marketToken,
+                collateralToken,
+                fees.ui.uiFeeAmount,
+                Keys.UI_POSITION_FEE_TYPE
+            );
+        }
+        if (fees.referral.affiliateRewardAmount > 0 && fees.referral.affiliate != address(0)) {
+            ReferralUtils.incrementAffiliateReward(
+                params.contracts.dataStore,
+                params.contracts.eventEmitter,
+                params.market.marketToken,
+                collateralToken,
+                fees.referral.affiliate,
+                fees.referral.affiliateRewardAmount
+            );
         }
     }
 }

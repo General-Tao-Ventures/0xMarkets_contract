@@ -436,7 +436,7 @@ library PositionUtils {
             cache.collateralUsd
         );
         info.mmr = cache.mmr;
-        info.requiredCollateralUsd = Precision.applyFactor(position.sizeInUsd(), cache.mmr).toInt256();
+        info.requiredCollateralUsd = Precision.applyFactor(cache.collateralUsd, cache.mmr).toInt256();
 
         if (info.remainingCollateralUsd < info.requiredCollateralUsd) {
             return (true, "mmr breach", info);

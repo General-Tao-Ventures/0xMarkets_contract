@@ -393,6 +393,10 @@ describe("Exchange.MarketIncreaseOrder", () => {
     await handleOrder(fixture, {
       create: { ...params, initialCollateralDeltaAmount: 0, minOutputAmount: 0, account: user0 },
       execute: {
+        tokens: [wnt.address, usdc.address],
+        precisions: [8, 18],
+        minPrices: [expandDecimals(5500, 4), expandDecimals(1, 6)],
+        maxPrices: [expandDecimals(5500, 4), expandDecimals(1, 6)],
         expectedCancellationReason: "LiquidatablePosition",
       },
     });

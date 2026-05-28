@@ -70,14 +70,19 @@ describe("Guardian.Callback", () => {
 
     expect(await getAccountPositionCount(dataStore, user0.address)).to.eq(1);
 
+    // Under requiredCollateralUsd = collateralUsd * mmr, only PnL losses trip liq.
+    // $25k USDC collateral, 40 ETH long: required = $25k * 1% = $250. Liquidates
+    // when remaining < $250, i.e., loss > $24,750. Mark = $5000 - $24,750/40 = $4381.
+    // Use $4380 for safety margin against fees.
+
     // Get liquidated
     await executeLiquidation(fixture, {
       account: user0.address,
       market: ethUsdMarket,
       collateralToken: usdc,
       isLong: true,
-      minPrices: [expandDecimals(4424, 4), expandDecimals(1, 6)], // Barely liquidatable
-      maxPrices: [expandDecimals(4424, 4), expandDecimals(1, 6)],
+      minPrices: [expandDecimals(4380, 4), expandDecimals(1, 6)],
+      maxPrices: [expandDecimals(4380, 4), expandDecimals(1, 6)],
     });
 
     // Callback contract is called
@@ -105,14 +110,17 @@ describe("Guardian.Callback", () => {
 
     expect(await getAccountPositionCount(dataStore, user0.address)).to.eq(1);
 
+    // Short side: $25k collateral, 40 ETH short at $5000. Loss > $24,750 needs
+    // mark > $5000 + $24,750/40 = $5618.75. Use $5620 for safety margin.
+
     // Get liquidated
     await executeLiquidation(fixture, {
       account: user0.address,
       market: ethUsdMarket,
       collateralToken: usdc,
       isLong: false,
-      minPrices: [expandDecimals(5576, 4), expandDecimals(1, 6)], // Barely liquidatable
-      maxPrices: [expandDecimals(5576, 4), expandDecimals(1, 6)],
+      minPrices: [expandDecimals(5620, 4), expandDecimals(1, 6)],
+      maxPrices: [expandDecimals(5620, 4), expandDecimals(1, 6)],
     });
 
     // Callback is called again

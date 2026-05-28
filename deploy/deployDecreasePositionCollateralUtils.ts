@@ -3,17 +3,17 @@ import { createDeployFunction } from "../utils/deploy";
 const func = createDeployFunction({
   contractName: "DecreasePositionCollateralUtils",
   libraryNames: [
-    "BaseOrderUtils",
     "FeeUtils",
-    "MarketCollateralUtils",
+    "InsuranceFundUtils",
     "MarketEventUtils",
-    "PositionUtils",
-    "PositionExecutionPriceUtils",
-    "PositionPricingUtils",
-    "PositionEventUtils",
     "OrderEventUtils",
     "DecreasePositionSwapUtils",
-    "InsuranceFundUtils",
+    "PositionEventUtils",
+    "PositionExecutionPriceUtils",
+    "PositionUtils",
+    // Required since _distributeInsolventShares now calls
+    // ReferralUtils.incrementAffiliateReward (which emits via ReferralEventUtils).
+    "ReferralEventUtils",
   ],
 });
 
