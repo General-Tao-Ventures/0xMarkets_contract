@@ -28,10 +28,11 @@ describe("DynamicMmr", () => {
 
   describe("isPositionLiquidatable reason codes", () => {
     it("returns 'mmr breach' when collateral is positive but below required", async () => {
-      // Force the MMR floor to 5% so that required = 5% of notional regardless of leverage.
-      // Opening at 4x leverage (10 WETH on $200k size) yields currLeverage below the
-      // mmr_tuning curve, so the floor governs.
-      await dataStore.setUint(keys.minMmrKey(ethUsdMarket.marketToken), percentageToFloat("5%"));
+      // Required collateral now multiplies the position's collateralUsd, not the notional
+      // (Erkin's spec correction: mmr * IMR, not mmr * sizeInUsd). Set the floors so that
+      // the dynamic curve gets clamped to a known mmr and the floor governs.
+      await dataStore.setUint(keys.minMmrKey(ethUsdMarket.marketToken), percentageToFloat("15%"));
+      await dataStore.setUint(keys.maxMmrKey(ethUsdMarket.marketToken), percentageToFloat("20%"));
 
       await handleOrder(fixture, {
         create: {
@@ -50,8 +51,9 @@ describe("DynamicMmr", () => {
 
       const positionKey = getPositionKey(user0.address, ethUsdMarket.marketToken, wnt.address, true);
 
-      // At mark $4100: collateral (10 WETH) = $41k, PnL = 40 * (4100-5000) = -$36k
-      //   → remaining ≈ $5k (positive but below required $10k = 5% of $200k) → "mmr breach"
+      // At mark $4100: collateralUsd (10 WETH @ $4100) = $41k, PnL = 40 * (4100-5000) = -$36k
+      //   → remaining ≈ $5k.
+      // Required = collateralUsd * mmr = $41k * 15% = $6.15k → remaining < required → mmr breach
       const pricesMmrBreach = {
         indexTokenPrice: { min: expandDecimals(4100, 12), max: expandDecimals(4100, 12) },
         longTokenPrice: { min: expandDecimals(4100, 12), max: expandDecimals(4100, 12) },
@@ -69,8 +71,11 @@ describe("DynamicMmr", () => {
 
       expect(isLiquidatable).to.eq(true);
       expect(reason).to.eq("mmr breach");
-      expect(info.mmr).to.eq(percentageToFloat("5%"));
-      expect(info.requiredCollateralUsd).to.eq(decimalToFloat(200_000).mul(5).div(100));
+      expect(info.mmr).to.eq(percentageToFloat("15%"));
+      // requiredCollateralUsd = collateralUsd * 15%. collateralUsd ≈ 10 WETH * $4100 = $41k
+      // minus the small WETH fee deduction on open, so required lands just under $6,150.
+      expect(info.requiredCollateralUsd).to.be.gt(decimalToFloat(6000));
+      expect(info.requiredCollateralUsd).to.be.lt(decimalToFloat(6200));
       expect(info.remainingCollateralUsd).to.be.gt(0);
       expect(info.remainingCollateralUsd).to.be.lt(info.requiredCollateralUsd);
     });

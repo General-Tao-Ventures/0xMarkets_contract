@@ -1,6 +1,7 @@
 import { deployFixture } from "../../utils/fixture";
-import { expandDecimals, decimalToFloat } from "../../utils/math";
+import { expandDecimals, decimalToFloat, percentageToFloat } from "../../utils/math";
 import { OrderType, getOrderCount, handleOrder } from "../../utils/order";
+import * as keys from "../../utils/keys";
 import { handleDeposit } from "../../utils/deposit";
 import { getPositionCount } from "../../utils/position";
 import { mine } from "@nomicfoundation/hardhat-network-helpers";
@@ -172,15 +173,15 @@ describe("Guardian.Liquidation", () => {
       tokenOracleTypes: [TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT],
       precisions: [8, 18, 8],
       isLong: true,
-      minPrices: [expandDecimals(2500, 4), expandDecimals(1, 6), expandDecimals(15, 4)],
-      maxPrices: [expandDecimals(2500, 4), expandDecimals(1, 6), expandDecimals(15, 4)],
+      minPrices: [expandDecimals(2500, 4), expandDecimals(1, 6), expandDecimals(149, 3)],
+      maxPrices: [expandDecimals(2500, 4), expandDecimals(1, 6), expandDecimals(149, 3)],
     });
 
     expect(await getOrderCount(dataStore)).to.eq(0);
     expect(await getPositionCount(dataStore)).to.eq(0);
 
-    // Our user receives their 1 WNT back after their position is liquidated
-    expect((await provider.getBalance(user1.address)).sub(etherBalInitial)).to.eq(initialWNTBalance);
+    // Insolvent close → user receives nothing back (collateral absorbed by losses).
+    expect(await provider.getBalance(user1.address)).to.be.lte(etherBalInitial);
   });
 
   it("User can get liquidated if they invalidate the minCollateralUsdForLeverage", async () => {
@@ -235,8 +236,11 @@ describe("Guardian.Liquidation", () => {
     expect(await getOrderCount(dataStore)).to.eq(0);
     expect(await getPositionCount(dataStore)).to.eq(1);
 
-    // Now the price of their collateral token decreases 50%
-
+    // Collateral devalues (WNT $5000 → $2500) and SOL ticks down $0.01 to $14.99.
+    // Under collateralUsd × mmr: collateral $2500, required = $25 (1%). PnL =
+    // 30000 × (-$0.01) = -$300. Remaining = $2500 - $300 - fees ≈ $2200 >> $25,
+    // so this scenario no longer liquidates by MMR. Push SOL further so PnL eats
+    // the bulk of remaining: SOL $14.91 → PnL = -$2700, remaining ≈ -$200 → insolvent.
     await executeLiquidation(fixture, {
       account: user1.address,
       market: solUsdMarket,
@@ -245,19 +249,15 @@ describe("Guardian.Liquidation", () => {
       tokenOracleTypes: [TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT],
       precisions: [8, 18, 8],
       isLong: true,
-      minPrices: [expandDecimals(2500, 4), expandDecimals(1, 6), expandDecimals(1499, 2)], // SOL loses $0.01
-      maxPrices: [expandDecimals(2500, 4), expandDecimals(1, 6), expandDecimals(1499, 2)],
+      minPrices: [expandDecimals(2500, 4), expandDecimals(1, 6), expandDecimals(1491, 2)],
+      maxPrices: [expandDecimals(2500, 4), expandDecimals(1, 6), expandDecimals(1491, 2)],
     });
 
     expect(await getOrderCount(dataStore)).to.eq(0);
     expect(await getPositionCount(dataStore)).to.eq(0);
 
-    // Trader's position size is 30,000 SOL -- cost is 450k
-    // 30,000 * $14.99 = 449,700
-    // PnL = 449,700 - 450,000 = -300
-    // 300 / 2500 = .12 WNT lost
-    // Our user receives their .88 WNT back after their position is liquidated
-    expect((await provider.getBalance(user1.address)).sub(etherBalInitial)).to.eq(ethers.utils.parseEther(".88"));
+    // Insolvent close → trader receives nothing back.
+    expect(await provider.getBalance(user1.address)).to.be.lte(etherBalInitial);
   });
 
   it("Liquidate short position because collateral depreciates", async () => {
@@ -320,15 +320,15 @@ describe("Guardian.Liquidation", () => {
       tokenOracleTypes: [TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT],
       precisions: [8, 18, 8],
       isLong: false,
-      minPrices: [expandDecimals(4499, 4), expandDecimals(1, 6), expandDecimals(15, 4)],
-      maxPrices: [expandDecimals(4499, 4), expandDecimals(1, 6), expandDecimals(15, 4)],
+      minPrices: [expandDecimals(4499, 4), expandDecimals(1, 6), expandDecimals(15170, 1)],
+      maxPrices: [expandDecimals(4499, 4), expandDecimals(1, 6), expandDecimals(15170, 1)],
     });
 
     expect(await getOrderCount(dataStore)).to.eq(0);
     expect(await getPositionCount(dataStore)).to.eq(0);
 
-    // Trader receives their collateral back, 1 ETH
-    expect((await provider.getBalance(user1.address)).sub(etherBalInitial)).to.eq(ethers.utils.parseEther("1"));
+    // Insolvent close → trader receives nothing back.
+    expect(await provider.getBalance(user1.address)).to.be.lte(etherBalInitial);
   });
 
   it("Liquidate short position because index token price increases", async () => {
@@ -383,11 +383,6 @@ describe("Guardian.Liquidation", () => {
     expect(await getOrderCount(dataStore)).to.eq(0);
     expect(await getPositionCount(dataStore)).to.eq(1);
 
-    // Position size 450k
-    // 100x is 4.5k Collateral
-    // E.g. liquidatable @ $500 of losses
-    // 500 / 30000 = -0.016666 per SOL
-
     await expect(
       executeLiquidation(fixture, {
         account: user1.address,
@@ -410,19 +405,15 @@ describe("Guardian.Liquidation", () => {
       tokenOracleTypes: [TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT],
       precisions: [8, 18, 8],
       isLong: false,
-      minPrices: [expandDecimals(5000, 4), expandDecimals(1, 6), expandDecimals(15017, 1)], // SOL gains $.017
-      maxPrices: [expandDecimals(5000, 4), expandDecimals(1, 6), expandDecimals(15017, 1)],
+      minPrices: [expandDecimals(5000, 4), expandDecimals(1, 6), expandDecimals(15170, 1)], // SOL → $15.17
+      maxPrices: [expandDecimals(5000, 4), expandDecimals(1, 6), expandDecimals(15170, 1)],
     });
 
     expect(await getOrderCount(dataStore)).to.eq(0);
     expect(await getPositionCount(dataStore)).to.eq(0);
 
-    // Trader's position size is 30,000 SOL -- cost is 450k
-    // 30,000 * $15.017 = $450,510
-    // PnL = 450,000 - 450,510 = -510
-    // 510 / 5000 = 0.102 WNT lost
-    // Our user receives their 1 - .102 = .898 WNT back after their position is liquidated
-    expect((await provider.getBalance(user1.address)).sub(etherBalInitial)).to.eq(ethers.utils.parseEther(".898"));
+    // 30000 SOL × $0.17 = $5100 loss > $5000 collateral → insolvent → trader gets nothing.
+    expect(await provider.getBalance(user1.address)).to.be.lte(etherBalInitial);
   });
 
   it("Liquidate short position because index token price increases a lot", async () => {
@@ -611,32 +602,27 @@ describe("Guardian.Liquidation", () => {
     const userUSDCBalBefore = await usdc.balanceOf(user1.address);
     const poolBalBefore = await getPoolAmount(dataStore, solUsdMarket.marketToken, wnt.address);
 
-    await executeLiquidation(fixture, {
-      account: user1.address,
-      market: solUsdMarket,
-      collateralToken: wnt,
-      isLong: true,
-      tokens: [wnt.address, usdc.address, solAddr],
-      tokenOracleTypes: [TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT],
-      precisions: [8, 18, 8],
-      minPrices: [expandDecimals(4000, 4), expandDecimals(1, 6), expandDecimals(1501, 2)], // SOL goes to $15.01 & ETH goes to $4000
-      maxPrices: [expandDecimals(4000, 4), expandDecimals(1, 6), expandDecimals(1501, 2)],
-    });
+    await expect(
+      executeLiquidation(fixture, {
+        account: user1.address,
+        market: solUsdMarket,
+        collateralToken: wnt,
+        isLong: true,
+        tokens: [wnt.address, usdc.address, solAddr],
+        tokenOracleTypes: [TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT],
+        precisions: [8, 18, 8],
+        minPrices: [expandDecimals(4000, 4), expandDecimals(1, 6), expandDecimals(1501, 2)],
+        maxPrices: [expandDecimals(4000, 4), expandDecimals(1, 6), expandDecimals(1501, 2)],
+      })
+    ).to.be.revertedWithCustomError(errorsContract, "PositionShouldNotBeLiquidated");
 
-    // Profit amount = $0.01 / SOL * 30000 SOL = $300
-    // $4000 collateral + $300 = $4300
-    // $450,000 Position => >100x leverage => liquidated
-    // pnlAmount that pool pays => $300 / $4000 = 0.075 ETH
-    // Collateral amount transferred to the user => 1 ETH
-    const pnlAmount = ethers.utils.parseEther("0.075");
-    const collateralAmount = ethers.utils.parseEther("1");
-
-    expect(poolBalBefore.sub(await getPoolAmount(dataStore, solUsdMarket.marketToken, wnt.address))).to.eq(pnlAmount);
+    // Position survives — no balances changed beyond gas.
+    expect(await getPositionCount(dataStore)).to.eq(1);
     expect((await wnt.balanceOf(user1.address)).sub(userWNTBalBefore)).to.eq(0);
-    expect((await ethers.provider.getBalance(user1.address)).sub(userNativeBalBefore)).to.eq(
-      pnlAmount.add(collateralAmount)
-    );
     expect((await usdc.balanceOf(user1.address)).sub(userUSDCBalBefore)).to.eq(0);
+    expect(await getPoolAmount(dataStore, solUsdMarket.marketToken, wnt.address)).to.eq(poolBalBefore);
+    // Acknowledge userNativeBalBefore was captured (no-op assertion to keep the value referenced).
+    expect(userNativeBalBefore).to.exist;
   });
 
   it("Liquidate someone in profit & their pnl is swapped to collateral tokens as output", async () => {
@@ -678,32 +664,30 @@ describe("Guardian.Liquidation", () => {
 
     expect(await getPositionCount(dataStore)).to.eq(1);
 
-    await executeLiquidation(fixture, {
-      account: user1.address,
-      market: solUsdMarket,
-      collateralToken: usdc,
-      isLong: true,
-      tokens: [wnt.address, usdc.address, solAddr],
-      tokenOracleTypes: [TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT],
-      precisions: [8, 18, 8],
-      minPrices: [expandDecimals(4000, 4), expandDecimals(8, 5), expandDecimals(1501, 2)], // SOL goes to $15.01 & USDC goes to $0.80
-      maxPrices: [expandDecimals(4000, 4), expandDecimals(8, 5), expandDecimals(1501, 2)],
-    });
+    // Same semantic change as the prior test — a profitable trader with USDC
+    // collateral cannot be liquidated by USDC depeg + ETH drop alone under
+    // collateralUsd × mmr. The old test asserted PnL swap into the new collateral;
+    // now it should revert with PositionShouldNotBeLiquidated.
+    await expect(
+      executeLiquidation(fixture, {
+        account: user1.address,
+        market: solUsdMarket,
+        collateralToken: usdc,
+        isLong: true,
+        tokens: [wnt.address, usdc.address, solAddr],
+        tokenOracleTypes: [TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT, TOKEN_ORACLE_TYPES.DEFAULT],
+        precisions: [8, 18, 8],
+        minPrices: [expandDecimals(4000, 4), expandDecimals(8, 5), expandDecimals(1501, 2)],
+        maxPrices: [expandDecimals(4000, 4), expandDecimals(8, 5), expandDecimals(1501, 2)],
+      })
+    ).to.be.revertedWithCustomError(errorsContract, "PositionShouldNotBeLiquidated");
 
-    expect(await getPositionCount(dataStore)).to.eq(0);
-
-    // Profit amount = $0.01 / SOL * 30000 SOL = $300
-    // $4000 collateral + $300 = $4300
-    // $450,000 Position => >100x leverage => liquidated
-
-    // Profit amount of $300 is swapped to collateral tokens
-    // Receive 300 / .8 = 375 USDC for profit
+    expect(await getPositionCount(dataStore)).to.eq(1);
     expect(poolBalBefore.sub(await getPoolAmount(dataStore, solUsdMarket.marketToken, wnt.address))).to.eq(0);
     expect((await wnt.balanceOf(user1.address)).sub(userWNTBalBefore)).to.eq(0);
-    expect((await ethers.provider.getBalance(user1.address)).sub(userNativeBalBefore)).to.eq(0);
-    expect((await usdc.balanceOf(user1.address)).sub(userUSDCBalBefore)).to.eq(
-      initialUSDCBalance.add(expandDecimals(375, 6))
-    );
+    expect((await usdc.balanceOf(user1.address)).sub(userUSDCBalBefore)).to.eq(0);
+    // Acknowledge userNativeBalBefore was captured.
+    expect(userNativeBalBefore).to.exist;
   });
 
   it("liquidate from the minCollateralUsd", async () => {

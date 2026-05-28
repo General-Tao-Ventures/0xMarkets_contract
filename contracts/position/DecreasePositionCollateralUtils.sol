@@ -365,6 +365,7 @@ library DecreasePositionCollateralUtils {
                     collateralCache.result.amountPaidInCollateralToken.toInt256()
                 );
             }
+
             if (collateralCache.result.amountPaidInSecondaryOutputToken > 0) {
                 MarketUtils.applyDeltaToPoolAmount(
                     params.contracts.dataStore,
@@ -374,6 +375,10 @@ library DecreasePositionCollateralUtils {
                     collateralCache.result.amountPaidInSecondaryOutputToken.toInt256()
                 );
             }
+
+            // empty the fees since the amount was entirely paid to the pool instead of for fees
+            // it is possible for the txn execution to still complete even in this case
+            // as long as the remainingCostUsd is still zero
             fees = getEmptyFees(fees);
         }
 
@@ -861,6 +866,12 @@ library DecreasePositionCollateralUtils {
         fees.validatorFeeAmount = Precision.applyFactor(fees.validatorFeeAmount, scale);
         fees.insuranceFeeAmount = Precision.applyFactor(fees.insuranceFeeAmount, scale);
         fees.ui.uiFeeAmount = Precision.applyFactor(fees.ui.uiFeeAmount, scale);
+        // Affiliate reward is part of totalCostAmountExcludingFunding too. Without
+        // scaling + crediting it here, the proportional portion of the recovered
+        // tokens that "belongs" to the affiliate would sit in the contract as
+        // orphan tokens (handleEarlyReturn zeros fees downstream, so handleReferral
+        // writes 0 to the affiliate). Pay it inside this function instead.
+        fees.referral.affiliateRewardAmount = Precision.applyFactor(fees.referral.affiliateRewardAmount, scale);
 
         address collateralToken = params.position.collateralToken();
 
@@ -884,6 +895,16 @@ library DecreasePositionCollateralUtils {
                 collateralToken,
                 fees.ui.uiFeeAmount,
                 Keys.UI_POSITION_FEE_TYPE
+            );
+        }
+        if (fees.referral.affiliateRewardAmount > 0 && fees.referral.affiliate != address(0)) {
+            ReferralUtils.incrementAffiliateReward(
+                params.contracts.dataStore,
+                params.contracts.eventEmitter,
+                params.market.marketToken,
+                collateralToken,
+                fees.referral.affiliate,
+                fees.referral.affiliateRewardAmount
             );
         }
     }
