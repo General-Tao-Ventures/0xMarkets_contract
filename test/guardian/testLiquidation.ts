@@ -383,7 +383,6 @@ describe("Guardian.Liquidation", () => {
     expect(await getOrderCount(dataStore)).to.eq(0);
     expect(await getPositionCount(dataStore)).to.eq(1);
 
-
     await expect(
       executeLiquidation(fixture, {
         account: user1.address,

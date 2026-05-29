@@ -17,30 +17,13 @@ import { BigNumber } from "ethers";
 describe("Guardian.Fees", () => {
   let fixture;
   let wallet, user0, user1;
-  let roleStore,
-    dataStore,
-    wnt,
-    usdc,
-    ethUsdMarket,
-    referralStorage,
-    exchangeRouter,
-    reader,
-    decreasePositionUtils;
+  let roleStore, dataStore, wnt, usdc, ethUsdMarket, referralStorage, exchangeRouter, reader, decreasePositionUtils;
 
   beforeEach(async () => {
     fixture = await deployFixture();
     ({ wallet, user0, user1 } = fixture.accounts);
-    ({
-      roleStore,
-      dataStore,
-      ethUsdMarket,
-      wnt,
-      usdc,
-      referralStorage,
-      exchangeRouter,
-      reader,
-      decreasePositionUtils,
-    } = fixture.contracts);
+    ({ roleStore, dataStore, ethUsdMarket, wnt, usdc, referralStorage, exchangeRouter, reader, decreasePositionUtils } =
+      fixture.contracts);
 
     await handleDeposit(fixture, {
       create: {
