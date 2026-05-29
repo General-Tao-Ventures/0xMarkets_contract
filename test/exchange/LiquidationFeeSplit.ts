@@ -55,16 +55,18 @@ describe("Exchange.LiquidationFeeSplit", () => {
 
     await grantRole(roleStore, wallet.address, "LIQUIDATION_KEEPER");
 
-    // Drop price enough to liquidate.
+    // Drop price enough to liquidate under requiredCollateralUsd = collateralUsd * mmr.
+    // At $4090: collateralUsd = $40,900, PnL = 40 * -$910 = -$36,400, remaining ≈ $4,500.
+    // required = $40,900 * 20% = $8,180 → remaining < required → MMR breach.
+    // Liq fee = 30% * $200k = $60k vs ~$4.5k available → partial payment exercises
+    // _distributeInsolventShares (scale ~7.5% of each receiver share).
     await executeLiquidation(fixture, {
       account: user0.address,
       market: ethUsdMarket,
       collateralToken: wnt,
       isLong: true,
-      // Price $4500 → PnL -$20k, $30k collateral remaining; fees $60k → 50%
-      // partial payment, exercising _distributeInsolventShares scaling.
-      minPrices: [expandDecimals(4500, 4), expandDecimals(1, 6)],
-      maxPrices: [expandDecimals(4500, 4), expandDecimals(1, 6)],
+      minPrices: [expandDecimals(4090, 4), expandDecimals(1, 6)],
+      maxPrices: [expandDecimals(4090, 4), expandDecimals(1, 6)],
       gasUsageLabel: "liquidationHandler.executeLiquidation",
     });
 
@@ -108,15 +110,14 @@ describe("Exchange.LiquidationFeeSplit", () => {
 
     await grantRole(roleStore, wallet.address, "LIQUIDATION_KEEPER");
 
+    // Same MMR-breach scenario as the prior test (price $4090).
     await executeLiquidation(fixture, {
       account: user0.address,
       market: ethUsdMarket,
       collateralToken: wnt,
       isLong: true,
-      // Price $4500 → PnL -$20k, $30k collateral remaining; fees $60k → 50%
-      // partial payment, exercising _distributeInsolventShares scaling.
-      minPrices: [expandDecimals(4500, 4), expandDecimals(1, 6)],
-      maxPrices: [expandDecimals(4500, 4), expandDecimals(1, 6)],
+      minPrices: [expandDecimals(4090, 4), expandDecimals(1, 6)],
+      maxPrices: [expandDecimals(4090, 4), expandDecimals(1, 6)],
       gasUsageLabel: "liquidationHandler.executeLiquidation",
     });
 
