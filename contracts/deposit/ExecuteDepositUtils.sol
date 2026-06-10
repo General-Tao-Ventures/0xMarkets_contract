@@ -16,6 +16,9 @@ import "../position/PositionUtils.sol";
 import "../gas/GasUtils.sol";
 import "../callback/CallbackUtils.sol";
 
+import "../insurance/InsuranceFundUtils.sol";
+import "../insurance/InsuranceVault.sol";
+
 import "../utils/Array.sol";
 
 import "hardhat/console.sol";
@@ -148,6 +151,31 @@ library ExecuteDepositUtils {
             cache.market,
             cache.prices
         );
+
+        // Settle any pending insurance injection into the pool BEFORE the deposit
+        // is priced. The injection recapitalises the pool toward its trigger
+        // threshold; pricing the newly minted GM afterwards means the depositor
+        // pays the post-injection (fair) price. Without this, a depositor entering
+        // after a realized loss mints GM at the depressed price and then captures
+        // the recapitalisation — extracting insurance reserves they never bore the
+        // loss for, at existing LPs' expense (ZEROMARK-266). No-op outside an
+        // active drawdown (no snapshot / drawdown at-or-below trigger / fund off).
+        {
+            address insuranceFundVault = params.dataStore.getAddress(Keys.INSURANCE_FUND_ADDRESS);
+            if (insuranceFundVault != address(0)) {
+                // A deposit has no position pnlToken; attemptInjectPool draws from
+                // both pool-token reserve buckets regardless of which is passed.
+                InsuranceFundUtils.attemptInjectPool(
+                    params.dataStore,
+                    params.eventEmitter,
+                    InsuranceVault(payable(insuranceFundVault)),
+                    cache.market,
+                    cache.prices,
+                    cache.market.longToken,
+                    params.key
+                );
+            }
+        }
 
         // deposits should improve the pool state but it should be checked if
         // the max pnl factor for deposits is exceeded as this would lead to the
@@ -282,18 +310,19 @@ library ExecuteDepositUtils {
         CallbackUtils.afterDepositExecution(params.key, deposit, cache.callbackEventData);
 
         // ! EXECUTION FEE EXEMPTION
-        // GasUtils.payExecutionFee(
-        //     params.dataStore,
-        //     params.eventEmitter,
-        //     params.depositVault,
-        //     params.key,
-        //     deposit.callbackContract(),
-        //     deposit.executionFee(),
-        //     params.startingGas,
-        //     GasUtils.estimateDepositOraclePriceCount(deposit.longTokenSwapPath().length + deposit.shortTokenSwapPath().length),
-        //     params.keeper,
-        //     deposit.receiver()
-        // );
+        // Keeper is subsidised out-of-band (payExecutionFee is not called), but
+        // any fee sent with the deposit is refunded to the receiver on success
+        // so it is not stranded in the vault (ZEROMARK-8). No-op when the fee is
+        // zero. Symmetric with the cancellation path.
+        GasUtils.refundExecutionFee(
+            params.dataStore,
+            params.eventEmitter,
+            params.depositVault,
+            params.key,
+            deposit.callbackContract(),
+            deposit.executionFee(),
+            deposit.receiver()
+        );
 
         return cache.receivedMarketTokens;
     }

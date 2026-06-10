@@ -172,6 +172,59 @@ library GasUtils {
         }
     }
 
+    // @dev refund the full execution fee to the receiver without paying the keeper.
+    //
+    // The protocol runs under an execution-fee exemption: keepers are subsidised
+    // out-of-band, so payExecutionFee is intentionally not called on successful
+    // execution. That left any fee sent with a request stranded in the request
+    // vault on success  — recoverable on cancellation (which still
+    // calls payExecutionFee) but not on success. This restores the success-side
+    // refund while keeping the keeper unpaid: the entire stored fee goes back to
+    // the receiver. No gas accounting is needed since the keeper share is zero.
+    //
+    // No-op when executionFee == 0 (the common exempt case), so paths that never
+    // carry a fee (e.g. liquidation / ADL orders) are unaffected.
+    //
+    // @param bank the StrictBank (request vault) holding the execution fee
+    // @param key the request key
+    // @param callbackContract the request's callback contract (if any)
+    // @param executionFee the stored execution fee to refund
+    // @param refundReceiver the account that receives the refund
+    function refundExecutionFee(
+        DataStore dataStore,
+        EventEmitter eventEmitter,
+        StrictBank bank,
+        bytes32 key,
+        address callbackContract,
+        uint256 executionFee,
+        address refundReceiver
+    ) external {
+        if (executionFee == 0) {
+            return;
+        }
+
+        address _wnt = dataStore.getAddress(Keys.WNT);
+        bank.transferOut(_wnt, address(this), executionFee);
+
+        IWNT(_wnt).withdraw(executionFee);
+
+        EventUtils.EventLogData memory eventData;
+        bool refundWasSent = CallbackUtils.refundExecutionFee(
+            dataStore,
+            key,
+            callbackContract,
+            executionFee,
+            eventData
+        );
+
+        if (refundWasSent) {
+            emitExecutionFeeRefundCallback(eventEmitter, callbackContract, executionFee);
+        } else {
+            TokenUtils.sendNativeToken(dataStore, refundReceiver, executionFee);
+            emitExecutionFeeRefund(eventEmitter, refundReceiver, executionFee);
+        }
+    }
+
     // @dev validate that the provided executionFee is sufficient based on the estimatedGasLimit
     // @param dataStore DataStore
     // @param estimatedGasLimit the estimated gas limit

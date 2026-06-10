@@ -132,6 +132,25 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
         }
         order.setAutoCancel(autoCancel);
 
+        // Reversed markets (e.g. EUR/USD stored internally as USD/EUR) require
+        // trigger/acceptable prices to be inverted into the internal domain.
+        // createOrder does this; updateOrder must mirror it, otherwise an order
+        // update writes raw user-domain prices that execute immediately at the
+        // wrong price. isLong is NOT flipped here — the order's
+        // direction was already inverted and stored at creation.
+        if (order.market() != address(0)) {
+            Market.Props memory market = MarketUtils.getEnabledMarket(dataStore, order.market());
+            if (market.reversed) {
+                if (triggerPrice != 0) {
+                    triggerPrice = Precision.mulDiv(Precision.FLOAT_PRECISION, Precision.FLOAT_PRECISION, triggerPrice);
+                }
+                if (acceptablePrice != 0) {
+                    acceptablePrice =
+                        Precision.mulDiv(Precision.FLOAT_PRECISION, Precision.FLOAT_PRECISION, acceptablePrice);
+                }
+            }
+        }
+
         order.setSizeDeltaUsd(sizeDeltaUsd);
         order.setTriggerPrice(triggerPrice);
         order.setAcceptablePrice(acceptablePrice);
