@@ -568,7 +568,7 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
 
         _validateAndClearAction(actionKey, "setPythLazerFeed");
 
-        // 112: feedId is read by PythLazerFeedProvider via getUint, so it must be written with setUint —
+        // ZEROMARK-112: feedId is read by PythLazerFeedProvider via getUint, so it must be written with setUint —
         // setBytes32 lands in a different DataStore mapping and the provider reads back 0.
         dataStore.setUint(Keys.pythLazerFeedIdKey(token), pythLazerFeedId);
         dataStore.setBool(Keys.pythLazerFeedInvertedKey(token), pythLazerFeedInverted);
