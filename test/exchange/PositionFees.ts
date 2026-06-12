@@ -153,6 +153,75 @@ describe("Exchange.PositionFees", () => {
     });
   });
 
+  // ZEROMARK-264 regression. Before the runtime clamp in PositionPricingUtils,
+  // a pro discount + min affiliate reward whose sum exceeds 100% of the position
+  // fee made `positionFeeAmount - affiliateRewardAmount - totalDiscountAmount`
+  // underflow. Every fee calculation reverted, including the one used by
+  // isPositionLiquidatable — so liquidation could not run and bad debt grew.
+  // With the clamp, the affiliate reward shrinks to whatever is left after
+  // the trader discount, protocolFeeAmount falls to zero, and the order path
+  // (which the liquidation path also exercises) completes.
+  describe("affiliate reward clamps when pro discount + min affiliate would exceed position fee", () => {
+    it("pro 98% + min affiliate 3% → affiliate shrinks to 2%, protocol fee 0, no revert", async () => {
+      await dataStore.setUint(keys.proTraderTierKey(user0.address), 1);
+      await dataStore.setUint(keys.proDiscountFactorKey(1), percentageToFloat("98%"));
+      await dataStore.setUint(keys.minAffiliateRewardFactorKey(1), percentageToFloat("3%"));
+
+      // size 200,000 USD × positionFeeFactor 0.05% / 5,000 USD per WNT = 0.02 WNT
+      const feeAmount = expandDecimals(2, 16);
+      // referralCode0 → tier 1 → totalRebate 10%, discountShare 20%
+      // → referral.traderDiscountFactor = 2%, referral.affiliateRewardFactor = 8%
+      // pro discount (98%) > totalRebate (10%) so adjustedAffiliateRewardFactor
+      // gets floored at minAffiliateRewardFactor = 3%. without the clamp:
+      //   protocolFee = 100% - 3% - 98% = -1%  → UNDERFLOW
+      // with the clamp: affiliate is shrunk so the sum fits.
+
+      await handleOrder(fixture, {
+        create: {
+          account: user0,
+          market: ethUsdMarket,
+          initialCollateralToken: wnt,
+          initialCollateralDeltaAmount: expandDecimals(10, 18),
+          swapPath: [],
+          sizeDeltaUsd: decimalToFloat(200 * 1000),
+          acceptablePrice: expandDecimals(5050, 12),
+          executionFee: expandDecimals(1, 15),
+          minOutputAmount: 0,
+          orderType: OrderType.MarketIncrease,
+          isLong: true,
+          shouldUnwrapNativeToken: false,
+          referralCode: referralCode0,
+        },
+        execute: {
+          afterExecution: ({ logs }) => {
+            const event = getEventData(logs, "PositionFeesCollected");
+
+            // the pre-clamp factor stays at min affiliate (the clamp acts on
+            // amounts, not factors), so this still reads 3%
+            expect(event["referral.adjustedAffiliateRewardFactor"]).eq(percentageToFloat("3%"));
+
+            // pro discount preserved (the trader keeps what they signed up for)
+            expect(event["pro.traderDiscountAmount"]).eq(feeAmount.mul(percentageToFloat("98%")).div(FLOAT_PRECISION));
+
+            // affiliate shrunk to fit: positionFeeAmount × (100% - 98%) = feeAmount × 2%
+            const expectedClampedAffiliate = feeAmount.mul(percentageToFloat("2%")).div(FLOAT_PRECISION);
+            expect(event["referral.affiliateRewardAmount"], "affiliate amount should be clamped").eq(
+              expectedClampedAffiliate
+            );
+
+            // totalRebateAmount is recomputed consistently after the clamp:
+            // = clamped affiliate (2% of fee) + referral trader discount (2% of fee)
+            const expectedReferralTraderDiscount = feeAmount.mul(percentageToFloat("2%")).div(FLOAT_PRECISION);
+            expect(event["referral.traderDiscountAmount"]).eq(expectedReferralTraderDiscount);
+            expect(event["referral.totalRebateAmount"]).eq(
+              expectedClampedAffiliate.add(expectedReferralTraderDiscount)
+            );
+          },
+        },
+      });
+    });
+  });
+
   it("pro tier discount", async () => {
     await dataStore.setUint(keys.proTraderTierKey(user0.address), 1);
 
