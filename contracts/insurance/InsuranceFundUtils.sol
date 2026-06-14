@@ -234,9 +234,6 @@ library InsuranceFundUtils {
                 epochValue,
                 triggerFactor
             );
-            if (requestedTokens == 0) {
-                return 0;
-            }
         }
 
         injectedUsd = _injectFromBucket(dataStore, eventEmitter, vault, market, prices, pnlToken, orderKey, triggerFactor);
@@ -251,7 +248,10 @@ library InsuranceFundUtils {
         // gap, paid is the portion of it the buckets actually covered.
         {
             (uint256 drawdownAfter, uint256 currentValue, uint256 epochValue) = getDrawdownFraction(dataStore, market, prices);
-            if (drawdownAfter > triggerFactor) {
+            // requestedTokens > 0 keeps the shortfall denominated in a meaningful pnlToken amount:
+            // if the entry gap rounded to zero pnlToken units there is nothing to report against
+            // (any residual is sub-one-unit dust), so we skip the otherwise requested==0 event.
+            if (drawdownAfter > triggerFactor && requestedTokens > 0) {
                 uint256 stillMissingTokens = _computeRequestedInjection(
                     market,
                     prices,
