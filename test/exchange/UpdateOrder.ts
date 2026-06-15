@@ -287,4 +287,39 @@ describe("Exchange.UpdateOrder", () => {
     expect(order.numbers.triggerPrice).eq(triggerPriceInput);
     expect(order.numbers.acceptablePrice).eq(acceptablePriceInput);
   });
+
+  // CursorBot: the reversed-market fix loads the market in updateOrder; it must NOT enforce the
+  // enabled gate, otherwise an order on a later-disabled market could no longer be updated (or
+  // unfrozen / have its execution fee topped up) even though cancellation should still work.
+  it("updateOrder does not require the market to be enabled (order on a disabled market is still updatable)", async () => {
+    const createParams = {
+      market: ethUsdMarket,
+      initialCollateralToken: wnt,
+      initialCollateralDeltaAmount: expandDecimals(10, 18),
+      swapPath: [ethUsdMarket.marketToken],
+      sizeDeltaUsd: decimalToFloat(200 * 1000),
+      triggerPrice: expandDecimals(5000, 12),
+      acceptablePrice: expandDecimals(5001, 12),
+      executionFee,
+      minOutputAmount: expandDecimals(50000, 6),
+      orderType: OrderType.StopLossDecrease,
+      isLong: true,
+      shouldUnwrapNativeToken: false,
+    };
+    await createOrder(fixture, createParams);
+    const orderKeys = await getOrderKeys(dataStore, 0, 1);
+
+    // Disable the market AFTER the order exists.
+    await dataStore.setBool(keys.isMarketDisabledKey(ethUsdMarket.marketToken), true);
+
+    await wnt.mint(orderVault.address, "700");
+
+    // Must not revert with DisabledMarket.
+    await exchangeRouter
+      .connect(user0)
+      .updateOrder(orderKeys[0], decimalToFloat(250 * 1000), expandDecimals(5001, 12), expandDecimals(5000, 12), expandDecimals(52000, 6), 0, false);
+
+    const order = await reader.getOrder(dataStore.address, orderKeys[0]);
+    expect(order.numbers.sizeDeltaUsd).eq(decimalToFloat(250 * 1000));
+  });
 });

@@ -6,6 +6,7 @@ import "./BaseOrderHandler.sol";
 import "../error/ErrorUtils.sol";
 import "./IOrderHandler.sol";
 import "../market/MarketUtils.sol";
+import "../market/MarketStoreUtils.sol";
 import "../order/OrderUtils.sol";
 import "../order/ExecuteOrderUtils.sol";
 
@@ -41,13 +42,22 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
     //      whether the market is reversed — createOrder uses the flag to also flip isLong; updateOrder
     //      ignores it (direction is fixed at creation). No-op for the zero market or non-reversed.
     // @return the trigger price, acceptable price, and whether the market is reversed
-    function _normalizeReversedPrices(address market, uint256 triggerPrice, uint256 acceptablePrice)
-        private
-        view
-        returns (uint256, uint256, bool reversed)
-    {
+    function _normalizeReversedPrices(
+        address market,
+        uint256 triggerPrice,
+        uint256 acceptablePrice,
+        bool requireEnabled
+    ) private view returns (uint256, uint256, bool reversed) {
         if (market != address(0)) {
-            reversed = MarketUtils.getEnabledMarket(dataStore, market).reversed;
+            // Read `reversed` WITHOUT the enabled-market gate so this never reverts on a disabled
+            // market. createOrder passes requireEnabled=true to keep its long-standing "no creation
+            // on a disabled market" behavior; updateOrder passes false so updates/cancels of orders
+            // on a later-disabled market stay possible (it loaded no market at all before this fix).
+            Market.Props memory marketProps = MarketStoreUtils.get(dataStore, market);
+            if (requireEnabled) {
+                MarketUtils.validateEnabledMarket(dataStore, marketProps);
+            }
+            reversed = marketProps.reversed;
             if (reversed) {
                 if (triggerPrice != 0) {
                     triggerPrice = Precision.mulDiv(Precision.FLOAT_PRECISION, Precision.FLOAT_PRECISION, triggerPrice);
@@ -73,7 +83,7 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
 
         bool reversed;
         (params.numbers.triggerPrice, params.numbers.acceptablePrice, reversed) =
-            _normalizeReversedPrices(params.addresses.market, params.numbers.triggerPrice, params.numbers.acceptablePrice);
+            _normalizeReversedPrices(params.addresses.market, params.numbers.triggerPrice, params.numbers.acceptablePrice, true);
         // Direction is inverted at creation only; the stored order keeps it (updateOrder must not re-flip).
         if (reversed) {
             params.isLong = !params.isLong;
@@ -152,7 +162,7 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
         // Mirror createOrder's reversed-market price normalization via the shared
         // helper so the two paths can never drift. isLong is NOT touched — the order's direction was
         // already inverted and stored at creation.
-        (triggerPrice, acceptablePrice,) = _normalizeReversedPrices(order.market(), triggerPrice, acceptablePrice);
+        (triggerPrice, acceptablePrice,) = _normalizeReversedPrices(order.market(), triggerPrice, acceptablePrice, false);
 
         order.setSizeDeltaUsd(sizeDeltaUsd);
         order.setTriggerPrice(triggerPrice);
