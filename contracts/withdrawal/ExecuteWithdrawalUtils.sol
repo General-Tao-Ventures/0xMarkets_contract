@@ -154,18 +154,19 @@ library ExecuteWithdrawalUtils {
         );
 
         // ! EXECUTION FEE EXEMPTION
-        // GasUtils.payExecutionFee(
-        //     params.dataStore,
-        //     params.eventEmitter,
-        //     params.withdrawalVault,
-        //     params.key,
-        //     withdrawal.callbackContract(),
-        //     withdrawal.executionFee(),
-        //     params.startingGas,
-        //     cache.oraclePriceCount,
-        //     params.keeper,
-        //     withdrawal.receiver()
-        // );
+        // Keeper is subsidised out-of-band (payExecutionFee is not called), but
+        // any fee sent with the withdrawal is refunded to the receiver on success
+        // so it is not stranded in the vault. No-op when the fee is
+        // zero. Symmetric with the cancellation path.
+        GasUtils.refundExecutionFee(
+            params.dataStore,
+            params.eventEmitter,
+            params.withdrawalVault,
+            params.key,
+            withdrawal.callbackContract(),
+            withdrawal.executionFee(),
+            withdrawal.receiver()
+        );
 
         return cache.result;
     }

@@ -532,10 +532,16 @@ library DecreasePositionCollateralUtils {
             values.output.outputAmount += params.order.initialCollateralDeltaAmount();
         }
 
-        // Insurance fund: see _maybeInjectInsurancePool. Extracted to a private
-        // helper to keep processCollateral under the stack-depth limit; the
-        // helper's locals don't pin slots in the parent.
-        _maybeInjectInsurancePool(params, cache);
+        // Insurance injection deliberately does NOT run here. It is invoked from
+        // DecreasePositionUtils AFTER updateTotalBorrowing, because the drawdown
+        // metric reads pool value that includes pending borrowing fees: at this
+        // point the realized borrowing fee has been credited to poolAmount but
+        // the pending-borrowing aggregate has not yet been reduced, so valuing
+        // here double-counts the fee, inflates pool value, and suppresses an
+        // otherwise-required injection. Running it post-borrowing
+        // also makes insolvent liquidations / ADL — which exit via
+        // handleEarlyReturn but still flow through DecreasePositionUtils — reach
+        // the injection check
 
         return (values, fees);
     }
@@ -544,12 +550,13 @@ library DecreasePositionCollateralUtils {
     // reserves from the InsuranceVault back into the pool. No-ops cleanly when
     // the trigger is the off-sentinel (type(uint256).max), drawdown is at or
     // below the threshold, the epoch snapshot is stale/uninitialized, or
-    // INSURANCE_FUND_ADDRESS is unset. ADL and liquidation paths flow through
-    // the same processCollateral and pick this up automatically.
-    function _maybeInjectInsurancePool(
+    // INSURANCE_FUND_ADDRESS is unset. Called from DecreasePositionUtils after
+    // updateTotalBorrowing so solvent decreases, insolvent liquidations and ADL
+    // all reach it at the correct settlement point.
+    function maybeInjectInsurancePool(
         PositionUtils.UpdatePositionParams memory params,
         PositionUtils.DecreasePositionCache memory cache
-    ) private {
+    ) internal {
         address vaultAddress = params.contracts.dataStore.getAddress(Keys.INSURANCE_FUND_ADDRESS);
         if (vaultAddress == address(0)) {
             return;
@@ -658,6 +665,10 @@ library DecreasePositionCollateralUtils {
             step
         );
 
+        // Note: insolvent liquidations / ADL return cleanly here (they do not
+        // revert), so they still flow back through DecreasePositionUtils, where
+        // the insurance injection now runs after updateTotalBorrowing — covering
+        // these bad-debt events (ZEROMARK-131) at the correct settlement point.
         return (values, getEmptyFees(fees));
     }
 

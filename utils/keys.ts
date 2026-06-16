@@ -538,6 +538,13 @@ export function collateralSumKey(market: string, collateralToken: string, isLong
   return hashData(["bytes32", "address", "address", "bool"], [COLLATERAL_SUM, market, collateralToken, isLong]);
 }
 
+export const REVERSED = hashString("REVERSED");
+
+// Mirrors MarketStoreUtils: keccak256(abi.encode(marketToken, REVERSED)).
+export function reversedKey(market: string) {
+  return hashData(["address", "bytes32"], [market, REVERSED]);
+}
+
 export function poolAmountKey(market: string, token: string) {
   return hashData(["bytes32", "address", "address"], [POOL_AMOUNT, market, token]);
 }
