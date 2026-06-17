@@ -9,6 +9,7 @@ import { getPositionKeys } from "../../utils/position";
 import { getExecuteParams } from "../../utils/exchange";
 import { getEventData } from "../../utils/event";
 import { prices } from "../../utils/prices";
+import * as keys from "../../utils/keys";
 
 describe("Exchange.DepositCollateral", () => {
   let fixture;
@@ -112,5 +113,44 @@ describe("Exchange.DepositCollateral", () => {
         expect(positionInfo.position.numbers.collateralAmount).eq(expandDecimals(20, 18));
       }
     );
+  });
+
+  // ZEROMARK-182: a zero-size MarketIncrease must still enforce the collateral / max-leverage floor.
+  // Previously the floor check was gated on sizeDeltaUsd > 0, so a dust zero-size increase could
+  // crystallize fees and leave a position above max leverage without ever reverting.
+  it("zero-size increase enforces the collateral / max-leverage floor (ZEROMARK-182)", async () => {
+    const params = {
+      account: user0,
+      market: ethUsdMarket,
+      initialCollateralToken: wnt,
+      initialCollateralDeltaAmount: expandDecimals(10, 18),
+      swapPath: [],
+      sizeDeltaUsd: decimalToFloat(0),
+      acceptablePrice: expandDecimals(5020, 12),
+      executionFee: expandDecimals(1, 15),
+      minOutputAmount: expandDecimals(50000, 6),
+      orderType: OrderType.MarketIncrease,
+      isLong: true,
+      shouldUnwrapNativeToken: false,
+    };
+
+    // Open a ~4x long: $200k size on 10 WETH (~$50k) collateral, under a generous 10x cap.
+    await dataStore.setUint(keys.maxLeverageKey(ethUsdMarket.marketToken), decimalToFloat(10));
+    await handleOrder(fixture, {
+      create: { ...params, sizeDeltaUsd: decimalToFloat(200_000) },
+      execute: getExecuteParams(fixture, { prices: [prices.usdc, prices.wnt.withSpread] }),
+    });
+
+    // Tighten the cap below the position's ~4x; the floor is now $200k / 2x = $100k > ~$50k collateral.
+    await dataStore.setUint(keys.maxLeverageKey(ethUsdMarket.marketToken), decimalToFloat(2));
+
+    // A zero-size increase with dust collateral must now be rejected, not silently accepted.
+    await handleOrder(fixture, {
+      create: { ...params, initialCollateralDeltaAmount: expandDecimals(1, 12), sizeDeltaUsd: decimalToFloat(0) },
+      execute: {
+        ...getExecuteParams(fixture, { prices: [prices.usdc, prices.wnt.withSpread] }),
+        expectedCancellationReason: "InsufficientCollateralUsd",
+      },
+    });
   });
 });

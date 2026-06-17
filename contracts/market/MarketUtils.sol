@@ -1070,10 +1070,14 @@ library MarketUtils {
         uint256 swapPerSecond = swapPerDay / 86400;
 
         if (swapPerSecond > 0) {
+            // Divide by the same pool divisor as funding term above (cache.fundingUsd /=
+            // divisor). In single-token markets (longToken == shortToken) divisor == 2 and the
+            // per-size split applies funding to both sides, so an undivided baseline-swap term is
+            // charged at 2x the configured rate.
             uint256 baselineSwapUsd = Precision.applyFactor(
                 swapLongsPayShorts ? cache.shortOpenInterest : cache.longOpenInterest,
                 cache.durationInSeconds * swapPerSecond
-            );
+            ) / divisor;
 
             if (result.longsPayShorts == swapLongsPayShorts) {
                 cache.fundingUsd += baselineSwapUsd;
@@ -1999,11 +2003,14 @@ library MarketUtils {
         uint256 leverageRatio = Precision.toFactor(currLeverage, maxLeverage);
         uint256 rawMmr = Precision.applyFactor(leverageRatio, mmrTuning);
 
+        // Clamp into [minMmr, maxMmr], applying the ceiling LAST so a misconfigured minMmr > maxMmr
+        // can never return a maintenance ratio above the configured maximum. The
+        // previous order returned minMmr early, skipping the ceiling.
         if (rawMmr < minMmr) {
-            return minMmr;
+            rawMmr = minMmr;
         }
         if (rawMmr > maxMmr) {
-            return maxMmr;
+            rawMmr = maxMmr;
         }
         return rawMmr;
     }

@@ -37,6 +37,57 @@ describe("Exchange.FundingFees.SingleTokenMarket", () => {
     });
   });
 
+  //the baseline-swap funding term must be divided by the same pool divisor as the GMX
+  // funding term. In a single-token market (divisor == 2) an undivided term is charged at 2x. Here
+  // we isolate the baseline term (GMX fundingFactor = 0) and lock the 1x amount; reverting the
+  // `/ divisor` in MarketUtils.getNextFundingAmountPerSize would double this value and fail the test.
+  it("baseline-swap funding is charged once (not 2x) in a single token market", async () => {
+    await dataStore.setUint(keys.fundingFactorKey(ethUsdSingleTokenMarket.marketToken), 0);
+    await dataStore.setBool(keys.baselineSwapLongsPayShortsKey(ethUsdSingleTokenMarket.marketToken), true);
+    await dataStore.setUint(keys.baselineSwapPerDayKey(ethUsdSingleTokenMarket.marketToken), decimalToFloat(1, 4)); // 0.01%/day
+
+    await handleOrder(fixture, {
+      create: {
+        account: user0,
+        market: ethUsdSingleTokenMarket,
+        initialCollateralToken: usdc,
+        initialCollateralDeltaAmount: expandDecimals(10_000, 6),
+        sizeDeltaUsd: decimalToFloat(200 * 1000),
+        acceptablePrice: expandDecimals(5050, 12),
+        orderType: OrderType.MarketIncrease,
+        isLong: true,
+      },
+    });
+    await handleOrder(fixture, {
+      create: {
+        account: user1,
+        market: ethUsdSingleTokenMarket,
+        initialCollateralToken: usdc,
+        initialCollateralDeltaAmount: expandDecimals(10_000, 6),
+        sizeDeltaUsd: decimalToFloat(100 * 1000),
+        acceptablePrice: expandDecimals(4950, 12),
+        orderType: OrderType.MarketIncrease,
+        isLong: false,
+      },
+    });
+
+    await time.increase(14 * 24 * 60 * 60);
+
+    const baselineInfo = await reader.getPositionInfo(
+      dataStore.address,
+      referralStorage.address,
+      getPositionKey(user0.address, ethUsdSingleTokenMarket.marketToken, usdc.address, true),
+      prices.ethUsdSingleTokenMarket,
+      1,
+      ethers.constants.AddressZero,
+      false
+    );
+
+    // 1x amount = rate (0.01%/day × 14d = 0.14%) × short-OI basis ($100k) = $140. Pre-fix the
+    // undivided baseline term charged 2x ($280); reverting the `/ divisor` fails this assertion.
+    expect(baselineInfo.fees.funding.fundingFeeAmount).eq("140000000");
+  });
+
   it("funding fees, single token market", async () => {
     await dataStore.setUint(keys.fundingFactorKey(ethUsdSingleTokenMarket.marketToken), decimalToFloat(1, 10));
     await dataStore.setUint(keys.fundingExponentFactorKey(ethUsdSingleTokenMarket.marketToken), decimalToFloat(1));
