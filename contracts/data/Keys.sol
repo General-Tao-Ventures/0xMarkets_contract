@@ -180,6 +180,8 @@ library Keys {
     bytes32 public constant CLAIM_AFFILIATE_REWARDS_FEATURE_DISABLED = keccak256(abi.encode("CLAIM_AFFILIATE_REWARDS_FEATURE_DISABLED"));
     // @dev key for whether the claim ui fees feature is disabled
     bytes32 public constant CLAIM_UI_FEES_FEATURE_DISABLED = keccak256(abi.encode("CLAIM_UI_FEES_FEATURE_DISABLED"));
+    // @dev key for whether the claim (per-receiver protocol) fees feature is disabled
+    bytes32 public constant CLAIM_FEES_FEATURE_DISABLED = keccak256(abi.encode("CLAIM_FEES_FEATURE_DISABLED"));
     // @dev key for whether the subaccount feature is disabled
     bytes32 public constant SUBACCOUNT_FEATURE_DISABLED = keccak256(abi.encode("SUBACCOUNT_FEATURE_DISABLED"));
     // @dev key for whether the gasless feature is disabled
@@ -972,6 +974,15 @@ library Keys {
     function claimUiFeesFeatureDisabledKey(address module) internal pure returns (bytes32) {
         return keccak256(abi.encode(
             CLAIM_UI_FEES_FEATURE_DISABLED,
+            module
+        ));
+    }
+
+    // @dev key for whether claim (per-receiver protocol) fees is disabled
+    // @param the claim fees module
+    function claimFeesFeatureDisabledKey(address module) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            CLAIM_FEES_FEATURE_DISABLED,
             module
         ));
     }

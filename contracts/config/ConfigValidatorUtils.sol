@@ -149,6 +149,14 @@ library ConfigValidatorUtils {
         }
 
         if (baseKey == Keys.MIN_MMR) {
+            // ZEROMARK-149 guardrail: minMmr is the absolute floor of the maintenance buffer
+            // (requiredCollateralUsd = collateralUsd × mmr, clamped to >= minMmr). A value of 0 would
+            // let a low-leverage position's mmr clamp to 0 → zero maintenance buffer → the position is
+            // only liquidatable once already insolvent, pushing the loss onto LPs. Require a non-zero
+            // floor so every market always keeps some buffer.
+            if (value == 0) {
+                revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+            }
             if (value > Precision.FLOAT_PRECISION) {
                 revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
             }
@@ -175,12 +183,16 @@ library ConfigValidatorUtils {
         }
 
         if (baseKey == Keys.MIN_LEVERAGE) {
-            if (value < Precision.FLOAT_PRECISION) {
-                revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
-            }
-            uint256 maxLeverage = dataStore.getUint(Keys.getFullKey(Keys.MAX_LEVERAGE, data));
-            if (maxLeverage != 0 && value > maxLeverage) {
-                revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+            // minLeverage is opt-in: 0 means "no lower bound" (the deployed default for most markets).
+            // Only enforce the >= 1x floor and the <= maxLeverage ordering when a non-zero bound is set.
+            if (value != 0) {
+                if (value < Precision.FLOAT_PRECISION) {
+                    revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+                }
+                uint256 maxLeverage = dataStore.getUint(Keys.getFullKey(Keys.MAX_LEVERAGE, data));
+                if (maxLeverage != 0 && value > maxLeverage) {
+                    revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+                }
             }
         }
 

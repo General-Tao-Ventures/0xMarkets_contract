@@ -14,6 +14,7 @@ import "./MarketEventUtils.sol";
 import "./MarketStoreUtils.sol";
 
 import "../position/Position.sol";
+import "../position/LeverageLadderUtils.sol";
 import "../order/Order.sol";
 
 import "../oracle/Oracle.sol";
@@ -1984,6 +1985,19 @@ library MarketUtils {
         uint256 mmrTuning = getMmrTuning(dataStore, market);
         uint256 minMmr = getMinMmr(dataStore, market);
         uint256 maxMmr = getMaxMmr(dataStore, market);
+
+        // Honor the leverage ladder: a position whose notional falls into a tighter tier must be
+        // maintained against that tier's cap, not the global market max. willPositionCollateralBeSufficient
+        // already floors opening collateral on the ladder tier, but the MMR used at liquidation read only
+        // the global max — so a position opened under (e.g.) a 5x tier was liquidated as if it were allowed
+        // the global 50x, giving it a far smaller maintenance buffer than the tier intends
+        // A lower effective maxLeverage raises rawMmr → higher requiredCollateralUsd → liquidation at the
+        // tier-intended buffer. getMaxLeverageForNotional returns type(uint256).max when no ladder is
+        // configured, leaving the global max unchanged.
+        uint256 ladderMaxLeverage = LeverageLadderUtils.getMaxLeverageForNotional(dataStore, market, sizeInUsd);
+        if (ladderMaxLeverage != 0 && ladderMaxLeverage < maxLeverage) {
+            maxLeverage = ladderMaxLeverage;
+        }
 
         // Defensive: if maxLeverage is misconfigured (0), fall back to the hard
         // ceiling — the position cannot be validated under any sensible ratio.
