@@ -23,7 +23,7 @@ contract PythLazerFeedProvider is IOracleProvider {
     // Only the Oracle may pull a price. getOraclePrice spends this contract's own ETH on the Pyth
     // verification fee (verifyUpdate{value: fee}), funded via receive(); without this gate a
     // permissionless caller could replay public Pyth payloads and drain that ETH fee-by-fee
-    //. Mirrors ChainlinkDataStreamProvider, which also verifies + pays a fee.
+    // (318 / dup-127). Mirrors ChainlinkDataStreamProvider, which also verifies + pays a fee.
     modifier onlyOracle() {
         if (msg.sender != oracle) {
             revert Errors.Unauthorized(msg.sender, "Oracle");

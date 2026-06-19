@@ -73,6 +73,7 @@ describe("PythLazerFeedProvider", () => {
   let fixture: Awaited<ReturnType<typeof deployFixture>>;
   let dataStore: any;
   let wnt: any;
+  let usdc: any;
   let oracle: any;
   let config: any;
   let roleStore: any;
@@ -85,7 +86,7 @@ describe("PythLazerFeedProvider", () => {
 
   beforeEach(async () => {
     fixture = await deployFixture();
-    ({ dataStore, wnt, oracle, config, roleStore } = fixture.contracts);
+    ({ dataStore, wnt, usdc, oracle, config, roleStore } = fixture.contracts);
     ({ user0 } = fixture.accounts);
     pythLazerFeedProvider = await ethers.getContract("PythLazerFeedProvider");
 
@@ -205,24 +206,26 @@ describe("PythLazerFeedProvider", () => {
   it("setPythLazerFeed writes the keys/types the provider reads (112)", async () => {
     await grantRole(roleStore, user0.address, "CONFIG_KEEPER");
 
+    // use usdc — a token the beforeEach does NOT pre-configure, so the write-once guard doesn't trip
+    const token = usdc.address;
     const feedId = 327;
     const multiplier = FLOAT_PRECISION; // identity, so the resolved band is just price ∓ confidence
     const spreadFactor = FLOAT_PRECISION;
 
-    await config.connect(user0).setPythLazerFeed(wnt.address, feedId, false, multiplier, spreadFactor);
+    await config.connect(user0).setPythLazerFeed(token, feedId, false, multiplier, spreadFactor);
 
     // the provider reads these via getUint / getBool — they must be populated
-    expect(await dataStore.getUint(keys.pythLazerFeedIdKey(wnt.address))).to.eq(feedId);
-    expect(await dataStore.getUint(keys.pythLazerFeedMultiplierKey(wnt.address))).to.eq(multiplier);
-    expect(await dataStore.getBool(keys.pythLazerFeedInvertedKey(wnt.address))).to.eq(false);
-    expect(await dataStore.getUint(keys.pythLazerFeedSpreadFactorKey(wnt.address))).to.eq(spreadFactor);
+    expect(await dataStore.getUint(keys.pythLazerFeedIdKey(token))).to.eq(feedId);
+    expect(await dataStore.getUint(keys.pythLazerFeedMultiplierKey(token))).to.eq(multiplier);
+    expect(await dataStore.getBool(keys.pythLazerFeedInvertedKey(token))).to.eq(false);
+    expect(await dataStore.getUint(keys.pythLazerFeedSpreadFactorKey(token))).to.eq(spreadFactor);
 
     // and it must NOT write the wrong dataStream* key the buggy version used
-    expect(await dataStore.getBytes32(keys.dataStreamIdKey(wnt.address))).to.eq(ethers.constants.HashZero);
+    expect(await dataStore.getBytes32(keys.dataStreamIdKey(token))).to.eq(ethers.constants.HashZero);
 
     // end-to-end: a price pulled through the Oracle now resolves against the configured feed
     const callData = pythLazerFeedProvider.interface.encodeFunctionData("getOraclePrice", [
-      wnt.address,
+      token,
       encodePythLazerUpdate({ feedId, timestamp: TIMESTAMP_MICROS, price: 100_000_000, confidence: 50_000 }),
     ]);
     const result = await ethers.provider.call({
@@ -235,6 +238,23 @@ describe("PythLazerFeedProvider", () => {
     const expectedMax = BigNumber.from(100_000_000 + 50_000).mul(multiplier).div(FLOAT_PRECISION);
     expect(min).to.eq(expectedMin);
     expect(max).to.eq(expectedMax);
+  });
+
+  it("setPythLazerFeed / setDataStream enforce one feed config per token (CursorBot guard)", async () => {
+    await grantRole(roleStore, user0.address, "CONFIG_KEEPER");
+
+    const token = usdc.address;
+    await config.connect(user0).setPythLazerFeed(token, 327, false, FLOAT_PRECISION, FLOAT_PRECISION);
+
+    // a second pyth-lazer config must not silently overwrite
+    await expect(
+      config.connect(user0).setPythLazerFeed(token, 333, false, FLOAT_PRECISION, FLOAT_PRECISION)
+    ).to.be.revertedWithCustomError(errorsContract, "PythLazerFeedIdAlreadyExistsForToken");
+
+    // and a data-stream feed must not be added on top of a pyth-lazer feed
+    await expect(
+      config.connect(user0).setDataStream(token, ethers.utils.formatBytes32String("feed"), false, FLOAT_PRECISION, 0)
+    ).to.be.revertedWithCustomError(errorsContract, "PythLazerFeedIdAlreadyExistsForToken");
   });
 
   it("applies feed multiplier (the hardcoded exponent config) after confidence scaling", async () => {

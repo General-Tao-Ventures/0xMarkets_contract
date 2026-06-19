@@ -105,6 +105,9 @@ contract Config is ReentrancyGuard, RoleModule, BasicMulticall {
         if (dataStore.getBytes32(Keys.dataStreamIdKey(token)) != bytes32(0)) {
             revert Errors.DataStreamIdAlreadyExistsForToken(token);
         }
+        if (dataStore.getUint(Keys.pythLazerFeedIdKey(token)) != 0) {
+            revert Errors.PythLazerFeedIdAlreadyExistsForToken(token);
+        }
 
         ConfigValidatorUtils.validateRange(
             dataStore,
@@ -141,6 +144,9 @@ contract Config is ReentrancyGuard, RoleModule, BasicMulticall {
     ) external onlyConfigKeeper nonReentrant {
         if (dataStore.getBytes32(Keys.dataStreamIdKey(token)) != bytes32(0)) {
             revert Errors.DataStreamIdAlreadyExistsForToken(token);
+        }
+        if (dataStore.getUint(Keys.pythLazerFeedIdKey(token)) != 0) {
+            revert Errors.PythLazerFeedIdAlreadyExistsForToken(token);
         }
 
         ConfigValidatorUtils.validateRange(
