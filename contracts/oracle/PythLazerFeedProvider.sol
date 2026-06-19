@@ -17,10 +17,23 @@ import "./OracleUtils.sol";
 
 contract PythLazerFeedProvider is IOracleProvider {
     DataStore public immutable dataStore;
+    address public immutable oracle;
     PythLazer public immutable pythLazer;
 
-    constructor(DataStore _dataStore, address pythLazerFeedVerifier) {
+    // Only the Oracle may pull a price. getOraclePrice spends this contract's own ETH on the Pyth
+    // verification fee (verifyUpdate{value: fee}), funded via receive(); without this gate a
+    // permissionless caller could replay public Pyth payloads and drain that ETH fee-by-fee
+    //. Mirrors ChainlinkDataStreamProvider, which also verifies + pays a fee.
+    modifier onlyOracle() {
+        if (msg.sender != oracle) {
+            revert Errors.Unauthorized(msg.sender, "Oracle");
+        }
+        _;
+    }
+
+    constructor(DataStore _dataStore, address _oracle, address pythLazerFeedVerifier) {
         dataStore = _dataStore;
+        oracle = _oracle;
         pythLazer = PythLazer(pythLazerFeedVerifier);
     }
 
@@ -30,7 +43,7 @@ contract PythLazerFeedProvider is IOracleProvider {
     function getOraclePrice(
         address token,
         bytes memory data
-    ) external returns (OracleUtils.ValidatedPrice memory) {
+    ) external onlyOracle returns (OracleUtils.ValidatedPrice memory) {
         uint32 feedId = uint32(dataStore.getUint(Keys.pythLazerFeedIdKey(token)));
         if (feedId == 0) revert Errors.EmptyPythLazerFeedId(token);
 

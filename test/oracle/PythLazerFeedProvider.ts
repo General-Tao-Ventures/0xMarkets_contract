@@ -73,6 +73,10 @@ describe("PythLazerFeedProvider", () => {
   let fixture: Awaited<ReturnType<typeof deployFixture>>;
   let dataStore: any;
   let wnt: any;
+  let oracle: any;
+  let config: any;
+  let roleStore: any;
+  let user0: any;
   let pythLazerFeedProvider: any;
 
   const FEED_ID = 1;
@@ -81,7 +85,8 @@ describe("PythLazerFeedProvider", () => {
 
   beforeEach(async () => {
     fixture = await deployFixture();
-    ({ dataStore, wnt } = fixture.contracts);
+    ({ dataStore, wnt, oracle, config, roleStore } = fixture.contracts);
+    ({ user0 } = fixture.accounts);
     pythLazerFeedProvider = await ethers.getContract("PythLazerFeedProvider");
 
     await dataStore.setUint(keys.pythLazerFeedIdKey(wnt.address), FEED_ID);
@@ -107,6 +112,7 @@ describe("PythLazerFeedProvider", () => {
     const result = await ethers.provider.call({
       to: pythLazerFeedProvider.address,
       data: callData,
+      from: oracle.address, // getOraclePrice is gated to onlyOracle
     });
     return decodeValidatedPrice(result);
   }
@@ -172,9 +178,63 @@ describe("PythLazerFeedProvider", () => {
     const raw = await ethers.provider.call({
       to: pythLazerFeedProvider.address,
       data: callData,
+      from: oracle.address,
     });
     const err = parseError(raw) as any;
     expect(err.name).to.eq("InvalidPythLazerScaledConfidence");
+  });
+
+  it("reverts when getOraclePrice is called by a non-oracle (318 / dup-127)", async () => {
+    // getOraclePrice spends the provider's own ETH on the Pyth verification fee, so a permissionless
+    // caller could drain it. It must be gated to the Oracle.
+    await dataStore.setUint(keys.pythLazerFeedSpreadFactorKey(wnt.address), FLOAT_PRECISION);
+
+    const callData = pythLazerFeedProvider.interface.encodeFunctionData("getOraclePrice", [
+      wnt.address,
+      encodePythLazerUpdate({ feedId: FEED_ID, timestamp: TIMESTAMP_MICROS, price: 100_000_000, confidence: 50_000 }),
+    ]);
+    const raw = await ethers.provider.call({
+      to: pythLazerFeedProvider.address,
+      data: callData,
+      from: user0.address, // not the Oracle
+    });
+    const err = parseError(raw) as any;
+    expect(err.name).to.eq("Unauthorized");
+  });
+
+  it("setPythLazerFeed writes the keys/types the provider reads (112)", async () => {
+    await grantRole(roleStore, user0.address, "CONFIG_KEEPER");
+
+    const feedId = 327;
+    const multiplier = FLOAT_PRECISION; // identity, so the resolved band is just price ∓ confidence
+    const spreadFactor = FLOAT_PRECISION;
+
+    await config.connect(user0).setPythLazerFeed(wnt.address, feedId, false, multiplier, spreadFactor);
+
+    // the provider reads these via getUint / getBool — they must be populated
+    expect(await dataStore.getUint(keys.pythLazerFeedIdKey(wnt.address))).to.eq(feedId);
+    expect(await dataStore.getUint(keys.pythLazerFeedMultiplierKey(wnt.address))).to.eq(multiplier);
+    expect(await dataStore.getBool(keys.pythLazerFeedInvertedKey(wnt.address))).to.eq(false);
+    expect(await dataStore.getUint(keys.pythLazerFeedSpreadFactorKey(wnt.address))).to.eq(spreadFactor);
+
+    // and it must NOT write the wrong dataStream* key the buggy version used
+    expect(await dataStore.getBytes32(keys.dataStreamIdKey(wnt.address))).to.eq(ethers.constants.HashZero);
+
+    // end-to-end: a price pulled through the Oracle now resolves against the configured feed
+    const callData = pythLazerFeedProvider.interface.encodeFunctionData("getOraclePrice", [
+      wnt.address,
+      encodePythLazerUpdate({ feedId, timestamp: TIMESTAMP_MICROS, price: 100_000_000, confidence: 50_000 }),
+    ]);
+    const result = await ethers.provider.call({
+      to: pythLazerFeedProvider.address,
+      data: callData,
+      from: oracle.address,
+    });
+    const { min, max } = decodeValidatedPrice(result);
+    const expectedMin = BigNumber.from(100_000_000 - 50_000).mul(multiplier).div(FLOAT_PRECISION);
+    const expectedMax = BigNumber.from(100_000_000 + 50_000).mul(multiplier).div(FLOAT_PRECISION);
+    expect(min).to.eq(expectedMin);
+    expect(max).to.eq(expectedMax);
   });
 
   it("applies feed multiplier (the hardcoded exponent config) after confidence scaling", async () => {
