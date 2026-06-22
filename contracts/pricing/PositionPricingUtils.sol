@@ -558,30 +558,6 @@ library PositionPricingUtils {
         fees.totalDiscountAmount = fees.pro.traderDiscountAmount > fees.referral.traderDiscountAmount
             ? fees.pro.traderDiscountAmount
             : fees.referral.traderDiscountAmount;
-
-        // guarantee fees.positionFeeAmount - affiliateReward - totalDiscount never underflows,
-        // regardless of how proDiscountFactor / minAffiliateRewardFactor / referral factors
-        // are configured. the existing clamp on lines 542-551 trades min affiliate vs total
-        // rebate but does not enforce the global invariant (sum <= positionFeeAmount).
-        //
-        // primary scenario (per ZEROMARK-264): a high proDiscountFactor paired with a
-        // referral code that floors adjustedAffiliateRewardFactor at minAffiliateRewardFactor
-        // yields totalDiscountAmount + affiliateRewardAmount > positionFeeAmount.
-        // secondary safeguard: a misconfigured proDiscountFactor > FLOAT_PRECISION makes
-        // totalDiscountAmount alone exceed positionFeeAmount.
-        //
-        // preference: preserve the trader discount (what the user signed up for), shrink the
-        // affiliate reward, let protocolFeeAmount fall to zero. keeps isPositionLiquidatable
-        // and decrease paths alive when admin config is misaligned.
-        if (fees.totalDiscountAmount > fees.positionFeeAmount) {
-            fees.totalDiscountAmount = fees.positionFeeAmount;
-        }
-        uint256 maxAffiliateRewardAmount = fees.positionFeeAmount - fees.totalDiscountAmount;
-        if (fees.referral.affiliateRewardAmount > maxAffiliateRewardAmount) {
-            fees.referral.affiliateRewardAmount = maxAffiliateRewardAmount;
-            fees.referral.totalRebateAmount = fees.referral.affiliateRewardAmount + fees.referral.traderDiscountAmount;
-        }
-
         fees.protocolFeeAmount = fees.positionFeeAmount - fees.referral.affiliateRewardAmount - fees.totalDiscountAmount;
 
         fees.positionFeeVeAlphaFactor = dataStore.getUint(Keys.POSITION_FEE_VEALPHA_FACTOR);
