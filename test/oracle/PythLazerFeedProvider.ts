@@ -74,6 +74,7 @@ describe("PythLazerFeedProvider", () => {
   let dataStore: any;
   let wnt: any;
   let pythLazerFeedProvider: any;
+  let oracle: any;
 
   const FEED_ID = 1;
   const TIMESTAMP_MICROS = 1_700_000_000_000_000;
@@ -83,6 +84,7 @@ describe("PythLazerFeedProvider", () => {
     fixture = await deployFixture();
     ({ dataStore, wnt } = fixture.contracts);
     pythLazerFeedProvider = await ethers.getContract("PythLazerFeedProvider");
+    oracle = await ethers.getContract("Oracle");
 
     await dataStore.setUint(keys.pythLazerFeedIdKey(wnt.address), FEED_ID);
     await dataStore.setUint(keys.pythLazerFeedMultiplierKey(wnt.address), FLOAT_PRECISION);
@@ -104,9 +106,12 @@ describe("PythLazerFeedProvider", () => {
       wnt.address,
       encodePythLazerUpdate({ feedId, timestamp, price, confidence }),
     ]);
+    // getOraclePrice is gated to onlyOracle, so eth_call from any other address reverts
+    // with Unauthorized. Spoof the caller as Oracle here (read-only, no impersonation needed).
     const result = await ethers.provider.call({
       to: pythLazerFeedProvider.address,
       data: callData,
+      from: oracle.address,
     });
     return decodeValidatedPrice(result);
   }
@@ -172,6 +177,7 @@ describe("PythLazerFeedProvider", () => {
     const raw = await ethers.provider.call({
       to: pythLazerFeedProvider.address,
       data: callData,
+      from: oracle.address,
     });
     const err = parseError(raw) as any;
     expect(err.name).to.eq("InvalidPythLazerScaledConfidence");

@@ -2,7 +2,7 @@ import { setBoolIfDifferent } from "../utils/dataStore";
 import { createDeployFunction } from "../utils/deploy";
 import * as keys from "../utils/keys";
 
-const constructorContracts = ["DataStore"];
+const constructorContracts = ["DataStore", "Oracle"];
 
 const func = createDeployFunction({
   contractName: "PythLazerFeedProvider",

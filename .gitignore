@@ -22,6 +22,9 @@ artifacts
 deployments/localhost
 deployments.txt
 *.log
+
+#Foundry files
+cache_forge/
 .cursorignore*
 
 .idea
