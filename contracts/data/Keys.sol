@@ -230,6 +230,9 @@ library Keys {
     bytes32 public constant INSURANCE_FUND_BALANCE = keccak256(abi.encode("INSURANCE_FUND_BALANCE"));
     // @dev per-market USD snapshot of poolValueExcludingUnrealizedPnl at the last epoch start.
     bytes32 public constant INSURANCE_FUND_EPOCH_POOL_VALUE = keccak256(abi.encode("INSURANCE_FUND_EPOCH_POOL_VALUE"));
+    // @dev per-market MarketToken supply snapshot at the last epoch start, paired with
+    // INSURANCE_FUND_EPOCH_POOL_VALUE so drawdown is measured per-share (not on absolute pool value).
+    bytes32 public constant INSURANCE_FUND_EPOCH_SUPPLY = keccak256(abi.encode("INSURANCE_FUND_EPOCH_SUPPLY"));
     // @dev per-market timestamp of the last epoch start. Treat the fund as disabled
     // when this is zero (first epoch) or older than INSURANCE_FUND_MAX_EPOCH_AGE.
     bytes32 public constant INSURANCE_FUND_EPOCH_START = keccak256(abi.encode("INSURANCE_FUND_EPOCH_START"));
@@ -1296,6 +1299,14 @@ library Keys {
     function insuranceFundEpochPoolValueKey(address market) internal pure returns (bytes32) {
         return keccak256(abi.encode(
             INSURANCE_FUND_EPOCH_POOL_VALUE,
+            market
+        ));
+    }
+
+    // @dev per-market MarketToken supply snapshot at last epoch start
+    function insuranceFundEpochSupplyKey(address market) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            INSURANCE_FUND_EPOCH_SUPPLY,
             market
         ));
     }

@@ -4,6 +4,8 @@ import hre from "hardhat";
 import { deployContract } from "../../utils/deploy";
 import { deployFixture } from "../../utils/fixture";
 import { handleDeposit } from "../../utils/deposit";
+import { handleWithdrawal } from "../../utils/withdrawal";
+import { getSupplyOf } from "../../utils/token";
 import { grantRole } from "../../utils/role";
 import { prices } from "../../utils/prices";
 import { expandDecimals, decimalToFloat, percentageToFloat } from "../../utils/math";
@@ -133,6 +135,35 @@ describe("InsuranceFundUtils", () => {
     expect(drawdown).lt(percentageToFloat("9%"));
   });
 
+  it("getDrawdownFraction ignores a proportional LP withdrawal", async () => {
+    // Snapshot the epoch baseline (pool value AND share supply).
+    await testWrapper.snapshotEpoch(dataStore.address, eventEmitter.address, ethUsdMarket, prices.ethUsdMarket);
+
+    // user0 holds the entire LP supply; withdraw ~20% of it. A withdrawal burns shares and removes
+    // backing in the same proportion, so per-share value is unchanged. Pre-fix this drop in ABSOLUTE
+    // pool value faked a ~20% drawdown (and would have triggered an injection a holder could capture);
+    // with per-share normalization it must read as 0.
+    const supplyBefore = await getSupplyOf(ethUsdMarket.marketToken);
+    await handleWithdrawal(fixture, {
+      create: {
+        account: user0,
+        market: ethUsdMarket,
+        marketTokenAmount: supplyBefore.div(5),
+      },
+    });
+    const supplyAfter = await getSupplyOf(ethUsdMarket.marketToken);
+    expect(supplyAfter).lt(supplyBefore); // shares were actually burned
+
+    const [drawdown, current, snap] = await testWrapper.getDrawdownFraction(
+      dataStore.address,
+      ethUsdMarket,
+      prices.ethUsdMarket
+    );
+
+    expect(current).lt(snap); // absolute pool value DID fall...
+    expect(drawdown).eq(0); // ...but per-share is flat → no drawdown
+  });
+
   it("getDrawdownFraction returns 0 when epoch is stale", async () => {
     await testWrapper.snapshotEpoch(dataStore.address, eventEmitter.address, ethUsdMarket, prices.ethUsdMarket);
 
@@ -209,7 +240,9 @@ describe("InsuranceFundUtils", () => {
         hre.ethers.constants.HashZero
       )
     ).wait();
-    expect(await dataStore.getUint(keys.insuranceFundBalanceKey(ethUsdMarket.marketToken, wnt.address))).eq(reserveAmount);
+    expect(await dataStore.getUint(keys.insuranceFundBalanceKey(ethUsdMarket.marketToken, wnt.address))).eq(
+      reserveAmount
+    );
   });
 
   it("attemptInjectPool no-ops when drawdown is at/below trigger", async () => {
@@ -346,7 +379,9 @@ describe("InsuranceFundUtils", () => {
     expect(injection.token.toLowerCase()).eq(usdc.address.toLowerCase());
 
     const usdcPoolAfter = await dataStore.getUint(keys.poolAmountKey(ethUsdMarket.marketToken, usdc.address));
-    const usdcReserveAfter = await dataStore.getUint(keys.insuranceFundBalanceKey(ethUsdMarket.marketToken, usdc.address));
+    const usdcReserveAfter = await dataStore.getUint(
+      keys.insuranceFundBalanceKey(ethUsdMarket.marketToken, usdc.address)
+    );
     expect(usdcPoolAfter).gt(usdcPoolBefore);
     const injected = usdcPoolAfter.sub(usdcPoolBefore);
     expect(usdcReserveAfter).eq(reserveAmount.sub(injected));
@@ -396,7 +431,9 @@ describe("InsuranceFundUtils", () => {
 
     // Remainder came out of the USDC bucket.
     const usdcPoolAfter = await dataStore.getUint(keys.poolAmountKey(ethUsdMarket.marketToken, usdc.address));
-    const usdcReserveAfter = await dataStore.getUint(keys.insuranceFundBalanceKey(ethUsdMarket.marketToken, usdc.address));
+    const usdcReserveAfter = await dataStore.getUint(
+      keys.insuranceFundBalanceKey(ethUsdMarket.marketToken, usdc.address)
+    );
     expect(usdcPoolAfter).gt(usdcPoolBefore);
     expect(usdcReserveAfter).eq(usdcReserve.sub(usdcPoolAfter.sub(usdcPoolBefore)));
 

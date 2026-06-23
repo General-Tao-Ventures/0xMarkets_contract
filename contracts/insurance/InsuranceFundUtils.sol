@@ -77,13 +77,28 @@ library InsuranceFundUtils {
             return (0, currentPoolValueUsd, epochPoolValueUsd);
         }
 
-        if (currentPoolValueUsd >= epochPoolValueUsd) {
+        // measure the drawdown on per-SHARE value, not absolute pool value. A proportional
+        // LP withdrawal lowers the absolute pool value and burns MarketToken supply in the same ratio,
+        // leaving per-share value unchanged — it must not register as a drawdown (else a benign exit
+        // would fake a loss and trigger an injection that a holding account captures). Normalizing by
+        // supply isolates a real LP loss (PnL / price impact, supply unchanged → per-share falls) from a
+        // benign supply change (deposit / withdrawal → per-share flat).
+        uint256 epochSupply = dataStore.getUint(Keys.insuranceFundEpochSupplyKey(market.marketToken));
+        uint256 currentSupply = MarketToken(payable(market.marketToken)).totalSupply();
+        // No paired supply snapshot (epoch taken before this upgrade), an empty epoch, or an empty pool
+        // ⇒ treat the fund as disabled until the next snapshotEpoch re-baselines with a supply.
+        if (epochSupply == 0 || currentSupply == 0) {
             return (0, currentPoolValueUsd, epochPoolValueUsd);
         }
 
-        uint256 drawdownUsd = epochPoolValueUsd - currentPoolValueUsd;
-        // 1e30-scaled fraction. epochPoolValueUsd is non-zero by the check above.
-        drawdownFraction = (drawdownUsd * Precision.FLOAT_PRECISION) / epochPoolValueUsd;
+        uint256 epochPerShare = Precision.mulDiv(epochPoolValueUsd, Precision.FLOAT_PRECISION, epochSupply);
+        uint256 currentPerShare = Precision.mulDiv(currentPoolValueUsd, Precision.FLOAT_PRECISION, currentSupply);
+        if (currentPerShare >= epochPerShare) {
+            return (0, currentPoolValueUsd, epochPoolValueUsd);
+        }
+
+        // 1e30-scaled fraction. epochPerShare > currentPerShare >= 0 here, so it is non-zero.
+        drawdownFraction = Precision.mulDiv(epochPerShare - currentPerShare, Precision.FLOAT_PRECISION, epochPerShare);
     }
 
     // ---------------------------------------------------------------------
@@ -405,6 +420,13 @@ library InsuranceFundUtils {
         epochValue = poolValue < 0 ? 0 : uint256(poolValue);
 
         dataStore.setUint(Keys.insuranceFundEpochPoolValueKey(market.marketToken), epochValue);
+        // ZEROMARK-54: snapshot the share supply alongside the pool value so getDrawdownFraction can
+        // measure the decline per-share. Pairing is essential — a pool-value snapshot without its
+        // matching supply would mis-scale every subsequent drawdown.
+        dataStore.setUint(
+            Keys.insuranceFundEpochSupplyKey(market.marketToken),
+            MarketToken(payable(market.marketToken)).totalSupply()
+        );
         dataStore.setUint(Keys.insuranceFundEpochStartKey(market.marketToken), block.timestamp);
 
         InsuranceFundEventUtils.emitInsuranceFundEpochReset(
