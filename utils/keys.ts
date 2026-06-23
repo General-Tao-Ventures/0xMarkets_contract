@@ -164,6 +164,7 @@ export const INSURANCE_FUND_ADDRESS = hashString("INSURANCE_FUND_ADDRESS");
 export const INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR = hashString("INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR");
 export const INSURANCE_FUND_BALANCE = hashString("INSURANCE_FUND_BALANCE");
 export const INSURANCE_FUND_EPOCH_POOL_VALUE = hashString("INSURANCE_FUND_EPOCH_POOL_VALUE");
+export const INSURANCE_FUND_EPOCH_SUPPLY = hashString("INSURANCE_FUND_EPOCH_SUPPLY");
 export const INSURANCE_FUND_EPOCH_START = hashString("INSURANCE_FUND_EPOCH_START");
 export const INSURANCE_FUND_MAX_EPOCH_AGE = hashString("INSURANCE_FUND_MAX_EPOCH_AGE");
 export const INSURANCE_FUND_EPOCH_LENGTH = hashString("INSURANCE_FUND_EPOCH_LENGTH");
@@ -647,6 +648,10 @@ export function insuranceFundBalanceKey(market: string, token: string) {
 
 export function insuranceFundEpochPoolValueKey(market: string) {
   return hashData(["bytes32", "address"], [INSURANCE_FUND_EPOCH_POOL_VALUE, market]);
+}
+
+export function insuranceFundEpochSupplyKey(market: string) {
+  return hashData(["bytes32", "address"], [INSURANCE_FUND_EPOCH_SUPPLY, market]);
 }
 
 export function insuranceFundEpochStartKey(market: string) {

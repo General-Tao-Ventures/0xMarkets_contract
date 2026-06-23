@@ -237,16 +237,16 @@ library InsuranceFundUtils {
 
         uint256 requestedTokens;
         {
-            (uint256 drawdownBefore, uint256 currentValue, uint256 epochValue) = getDrawdownFraction(dataStore, market, prices);
+            (uint256 drawdownBefore, uint256 currentValue, ) = getDrawdownFraction(dataStore, market, prices);
             if (drawdownBefore <= triggerFactor) {
                 return 0;
             }
             requestedTokens = _computeRequestedInjection(
+                dataStore,
                 market,
                 prices,
                 pnlToken,
                 currentValue,
-                epochValue,
                 triggerFactor
             );
         }
@@ -262,17 +262,17 @@ library InsuranceFundUtils {
         // units to match the original request: requested is the entry-state
         // gap, paid is the portion of it the buckets actually covered.
         {
-            (uint256 drawdownAfter, uint256 currentValue, uint256 epochValue) = getDrawdownFraction(dataStore, market, prices);
+            (uint256 drawdownAfter, uint256 currentValue, ) = getDrawdownFraction(dataStore, market, prices);
             // requestedTokens > 0 keeps the shortfall denominated in a meaningful pnlToken amount:
             // if the entry gap rounded to zero pnlToken units there is nothing to report against
             // (any residual is sub-one-unit dust), so we skip the otherwise requested==0 event.
             if (drawdownAfter > triggerFactor && requestedTokens > 0) {
                 uint256 stillMissingTokens = _computeRequestedInjection(
+                    dataStore,
                     market,
                     prices,
                     pnlToken,
                     currentValue,
-                    epochValue,
                     triggerFactor
                 );
                 InsuranceFundEventUtils.emitInsuranceFundShortfall(
@@ -312,17 +312,21 @@ library InsuranceFundUtils {
         uint256 injectedAmount;
         uint256 drawdownBefore;
         {
-            (uint256 _drawdownBefore, uint256 currentValue, uint256 epochValue) = getDrawdownFraction(dataStore, market, prices);
+            (uint256 _drawdownBefore, uint256 currentValue, ) = getDrawdownFraction(dataStore, market, prices);
             if (_drawdownBefore <= triggerFactor) {
                 return 0;
             }
             drawdownBefore = _drawdownBefore;
+            // _computeRequestedInjection reads epochValue + the epoch/current supplies itself (off this
+            // stack) and computes the target per-share, consistently with getDrawdownFraction. Both
+            // supplies are non-zero here: getDrawdownFraction only reports a non-zero drawdown (we are past
+            // the trigger check) when both are non-zero.
             uint256 requestedTokens = _computeRequestedInjection(
+                dataStore,
                 market,
                 prices,
                 token,
                 currentValue,
-                epochValue,
                 triggerFactor
             );
             injectedAmount = requestedTokens > reserveBalance ? reserveBalance : requestedTokens;
@@ -378,19 +382,22 @@ library InsuranceFundUtils {
     // intermediate locals (target, missing, tokenPrice) don't pin slots
     // on the caller's stack — stack-too-deep otherwise.
     function _computeRequestedInjection(
+        DataStore dataStore,
         Market.Props memory market,
         MarketUtils.MarketPrices memory prices,
         address token,
         uint256 currentValue,
-        uint256 epochValue,
         uint256 triggerFactor
-    ) private pure returns (uint256) {
-        uint256 targetCurrentValue = Precision.applyFactor(
-            epochValue,
-            Precision.FLOAT_PRECISION - triggerFactor
+    ) private view returns (uint256) {
+        uint256 epochValue = dataStore.getUint(Keys.insuranceFundEpochPoolValueKey(market.marketToken));
+        uint256 targetCurrentValue = Precision.mulDiv(
+            Precision.applyFactor(epochValue, Precision.FLOAT_PRECISION - triggerFactor),
+            MarketToken(payable(market.marketToken)).totalSupply(),
+            dataStore.getUint(Keys.insuranceFundEpochSupplyKey(market.marketToken))
         );
-        // drawdown > triggerFactor (caller checked) ⇒ currentValue < targetCurrentValue.
-        uint256 missingUsd = targetCurrentValue - currentValue;
+        // Per-share drawdown > triggerFactor (caller checked) ⇒ currentValue < targetCurrentValue.
+        // Guard the subtraction anyway against boundary rounding between the two computation paths.
+        uint256 missingUsd = targetCurrentValue > currentValue ? targetCurrentValue - currentValue : 0;
 
         // Use tokenPrice.min so we slightly over-inject (LP-favorable rounding).
         Price.Props memory tokenPrice = MarketUtils.getCachedTokenPrice(token, market, prices);

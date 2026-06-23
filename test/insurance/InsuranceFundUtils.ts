@@ -342,6 +342,66 @@ describe("InsuranceFundUtils", () => {
     expect(drawdownAfter).lte(percentageToFloat("2%"));
   });
 
+  it("attemptInjectPool targets the per-share threshold after a supply change (ZEROMARK-54)", async () => {
+    // Snapshot the baseline, THEN grow LP supply with a second proportional deposit. Per-share value is
+    // unchanged by the deposit, but the ABSOLUTE pool value now far exceeds the epoch snapshot. With the
+    // old absolute target (epochValue × (1 - trigger)), a subsequent injection computes
+    // `target - currentValue` on currentValue > target → underflow revert. The per-share target must be
+    // scaled to the current supply.
+    await testWrapper.snapshotEpoch(dataStore.address, eventEmitter.address, ethUsdMarket, prices.ethUsdMarket);
+
+    await handleDeposit(fixture, {
+      create: {
+        market: ethUsdMarket,
+        longTokenAmount: expandDecimals(1000, 18),
+        shortTokenAmount: expandDecimals(1_000_000, 6),
+      },
+    });
+
+    // A genuine per-share loss: remove 100 WETH (~$500k) without burning any shares.
+    await dataStore.decrementUint(keys.poolAmountKey(ethUsdMarket.marketToken, wnt.address), expandDecimals(100, 18));
+    await dataStore.setUint(
+      keys.insuranceFundDrawdownTriggerFactorKey(ethUsdMarket.marketToken),
+      percentageToFloat("2%")
+    );
+
+    const [drawdownBefore] = await testWrapper.getDrawdownFraction(
+      dataStore.address,
+      ethUsdMarket,
+      prices.ethUsdMarket
+    );
+    expect(drawdownBefore).gt(percentageToFloat("2%")); // a real drawdown above the trigger exists
+
+    // Seed the reserve.
+    const reserveAmount = expandDecimals(200, 18);
+    await wnt.connect(wallet).deposit({ value: reserveAmount });
+    await wnt.connect(wallet).transfer(insuranceVault.address, reserveAmount);
+    await insuranceVault.syncTokenBalance(wnt.address);
+    await dataStore.setUint(keys.insuranceFundBalanceKey(ethUsdMarket.marketToken, wnt.address), reserveAmount);
+
+    // Pre-fix: reverts on missingUsd underflow (absolute target < grown pool). Post-fix: injects only
+    // what restores the per-share threshold.
+    const tx = await testWrapper.attemptInjectPool(
+      dataStore.address,
+      eventEmitter.address,
+      insuranceVault.address,
+      ethUsdMarket,
+      prices.ethUsdMarket,
+      wnt.address,
+      hre.ethers.constants.HashZero
+    );
+    await tx.wait();
+
+    const reserveAfter = await dataStore.getUint(keys.insuranceFundBalanceKey(ethUsdMarket.marketToken, wnt.address));
+    const injected = reserveAmount.sub(reserveAfter);
+
+    expect(injected).gt(0); // it did inject...
+    expect(injected).lt(reserveAmount); // ...a bounded amount, not the whole reserve (no over-inject)
+
+    const [drawdownAfter] = await testWrapper.getDrawdownFraction(dataStore.address, ethUsdMarket, prices.ethUsdMarket);
+    expect(drawdownAfter).lte(percentageToFloat("2%")); // restored to threshold
+  });
+
   it("attemptInjectPool draws from the other pool-token bucket when the pnlToken bucket is empty", async () => {
     // Regression for the dup-81 key mismatch: position fees deposit under the
     // position's collateralToken (USDC here), but injection used to read only
