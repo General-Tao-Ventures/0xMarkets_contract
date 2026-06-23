@@ -133,6 +133,69 @@ library ConfigValidatorUtils {
         //     }
         // }
 
+        // Dynamic-MMR risk params : these were writable to any uint with no bounds.
+        // MMR factors are maintenance ratios (<= 100%); minMmr must not exceed maxMmr (else the
+        // clamp could otherwise return above the ceiling). Leverage is FLOAT_PRECISION-scaled
+        // (1x == FLOAT_PRECISION); minLeverage must not exceed maxLeverage. Cross-checks read the
+        // paired key and skip when it is still unset (0) so first-time configuration is unordered.
+        if (baseKey == Keys.MAX_MMR) {
+            if (value > Precision.FLOAT_PRECISION) {
+                revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+            }
+            uint256 minMmr = dataStore.getUint(Keys.getFullKey(Keys.MIN_MMR, data));
+            if (value < minMmr) {
+                revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+            }
+        }
+
+        if (baseKey == Keys.MIN_MMR) {
+            // ZEROMARK-149 guardrail: minMmr is the absolute floor of the maintenance buffer
+            // (requiredCollateralUsd = collateralUsd × mmr, clamped to >= minMmr). A value of 0 would
+            // let a low-leverage position's mmr clamp to 0 → zero maintenance buffer → the position is
+            // only liquidatable once already insolvent, pushing the loss onto LPs. Require a non-zero
+            // floor so every market always keeps some buffer.
+            if (value == 0) {
+                revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+            }
+            if (value > Precision.FLOAT_PRECISION) {
+                revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+            }
+            uint256 maxMmr = dataStore.getUint(Keys.getFullKey(Keys.MAX_MMR, data));
+            if (maxMmr != 0 && value > maxMmr) {
+                revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+            }
+        }
+
+        if (baseKey == Keys.MMR_TUNING) {
+            if (value > Precision.FLOAT_PRECISION) {
+                revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+            }
+        }
+
+        if (baseKey == Keys.MAX_LEVERAGE) {
+            if (value < Precision.FLOAT_PRECISION) {
+                revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+            }
+            uint256 minLeverage = dataStore.getUint(Keys.getFullKey(Keys.MIN_LEVERAGE, data));
+            if (value < minLeverage) {
+                revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+            }
+        }
+
+        if (baseKey == Keys.MIN_LEVERAGE) {
+            // minLeverage is opt-in: 0 means "no lower bound" (the deployed default for most markets).
+            // Only enforce the >= 1x floor and the <= maxLeverage ordering when a non-zero bound is set.
+            if (value != 0) {
+                if (value < Precision.FLOAT_PRECISION) {
+                    revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+                }
+                uint256 maxLeverage = dataStore.getUint(Keys.getFullKey(Keys.MAX_LEVERAGE, data));
+                if (maxLeverage != 0 && value > maxLeverage) {
+                    revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+                }
+            }
+        }
+
         if (baseKey == Keys.MIN_COLLATERAL_USD) {
             // revert if value > 10 USD
             if (value > 10 * Precision.FLOAT_PRECISION) {

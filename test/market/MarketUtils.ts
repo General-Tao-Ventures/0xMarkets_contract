@@ -204,5 +204,29 @@ describe("MarketUtils", () => {
       );
       expect(mmr).eq(cryptoCfg.maxMmr);
     });
+
+    // ZEROMARK-284: the dynamic MMR must be computed against the leverage-ladder cap for the
+    // position's notional, not the global market max. A position opened under a tighter tier was
+    // otherwise maintained as if it were allowed the global max, giving it too small a buffer.
+    it("uses the leverage-ladder cap for the notional, not the global max (ZEROMARK-284)", async () => {
+      const marketUtilsTest = await deployContract("MarketUtilsTest", []);
+      await setMmrParams(ethUsdMarket.marketToken, cryptoCfg); // global max = 100x
+
+      // Configure a single-tier ladder capping this notional at 50x (half the global max).
+      await dataStore.setUint(keys.leverageLadderTierCountKey(ethUsdMarket.marketToken), 1);
+      await dataStore.setUint(keys.leverageLadderMaxNotionalKey(ethUsdMarket.marketToken, 0), decimalToFloat(1_000_000));
+      await dataStore.setUint(keys.leverageLadderMaxLeverageKey(ethUsdMarket.marketToken, 0), decimalToFloat(50));
+
+      // $1M / $10k = 100x. Without the ladder this equals the global max → raw = tuning = 0.5%
+      // (proven by the "equals mmr_tuning at max_leverage" case above). With the 50x ladder cap the
+      // effective leverage ratio doubles: raw = (100/50) * 0.5% = 1.0% (not clamped, 0.3% ≤ 1% ≤ 10%).
+      const mmr = await marketUtilsTest.getDynamicMmr(
+        dataStore.address,
+        ethUsdMarket.marketToken,
+        decimalToFloat(1_000_000),
+        decimalToFloat(10_000)
+      );
+      expect(mmr).eq(percentageToFloat("1%"));
+    });
   });
 });

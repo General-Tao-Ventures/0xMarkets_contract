@@ -26,7 +26,12 @@ describe("Exchange.LiquidationFeeSplit", () => {
     await dataStore.setUint(keys.LIQUIDATION_FEE_VALIDATOR_FACTOR, decimalToFloat(30, 2));
     await dataStore.setUint(keys.LIQUIDATION_FEE_INSURANCE_FACTOR, decimalToFloat(20, 2));
 
+    // Force a flat 20% maintenance ratio. The hardhat market defaults to maxMmr = 10%, so minMmr
+    // must be paired with a matching maxMmr — otherwise the [minMmr, maxMmr] clamp caps the ratio
+    // back down to 10% (the maxMmr ceiling is applied last, per ZEROMARK-34) and the position would
+    // not breach at the price below.
     await dataStore.setUint(keys.minMmrKey(ethUsdMarket.marketToken), decimalToFloat(20, 2));
+    await dataStore.setUint(keys.maxMmrKey(ethUsdMarket.marketToken), decimalToFloat(20, 2));
 
     await handleDeposit(fixture, {
       create: {

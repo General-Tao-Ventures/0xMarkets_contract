@@ -404,6 +404,48 @@ describe("Config", () => {
     expect(onchainValue).eq(validValue);
   });
 
+  it("validates dynamic MMR risk params (ZEROMARK-34)", async () => {
+    const data = encodeData(["address"], [ethUsdMarket.marketToken]);
+
+    // MMR is a maintenance ratio: > 100% is rejected.
+    await expect(
+      config.setUint(keys.MAX_MMR, data, decimalToFloat(1).add(1))
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+
+    // A valid 20% ceiling.
+    await config.setUint(keys.MAX_MMR, data, percentageToFloat("20%"));
+
+    // minMmr must not exceed maxMmr (the misconfig the clamp ordering used to mishandle).
+    await expect(
+      config.setUint(keys.MIN_MMR, data, percentageToFloat("30%"))
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+
+    // ZEROMARK-149 guardrail: minMmr is the absolute floor of the maintenance buffer, so 0 (which
+    // would let a low-leverage position's mmr clamp to zero → no buffer → liquidate only once
+    // insolvent → LP loss) is rejected.
+    await expect(
+      config.setUint(keys.MIN_MMR, data, 0)
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+
+    // A valid 10% floor goes through.
+    await config.setUint(keys.MIN_MMR, data, percentageToFloat("10%"));
+
+    // Leverage is FLOAT_PRECISION-scaled (1x == FLOAT_PRECISION); below 1x is rejected.
+    await expect(
+      config.setUint(keys.MAX_LEVERAGE, data, decimalToFloat(1).sub(1))
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+
+    await config.setUint(keys.MAX_LEVERAGE, data, decimalToFloat(100)); // 100x ok
+
+    // minLeverage is opt-in: 0 ("no lower bound") must be accepted — it's the deployed default for
+    // most markets. A non-zero value below 1x is still rejected.
+    await config.setUint(keys.MIN_LEVERAGE, data, 0);
+    await expect(
+      config.setUint(keys.MIN_LEVERAGE, data, decimalToFloat(1).sub(1))
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+    await config.setUint(keys.MIN_LEVERAGE, data, decimalToFloat(2)); // 2x ok
+  });
+
   it("validates funding decrease factor", async () => {
     const validValue = bigNumberify("100000000000000000000000").div(86400);
     await expect(
