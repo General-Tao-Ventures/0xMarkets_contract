@@ -33,6 +33,7 @@ library Errors {
     error OracleProviderAlreadyExistsForToken(address token);
     error PriceFeedAlreadyExistsForToken(address token);
     error DataStreamIdAlreadyExistsForToken(address token);
+    error PythLazerFeedIdAlreadyExistsForToken(address token);
     error MaxFundingFactorPerSecondLimitExceeded(uint256 maxFundingFactorPerSecond, uint256 limit);
 
     // ContributorHandler errors

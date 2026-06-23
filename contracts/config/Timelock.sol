@@ -520,7 +520,7 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
 
     function signalSetPythLazerFeed(
         address token,
-        bytes32 pythLazerFeedId,
+        uint256 pythLazerFeedId,
         bool pythLazerFeedInverted,
         uint256 pythLazerFeedMultiplier,
         uint256 pythLazerFeedSpreadFactor
@@ -538,13 +538,12 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
         EventUtils.EventLogData memory eventData;
         eventData.addressItems.initItems(1);
         eventData.addressItems.setItem(0, "token", token);
-        eventData.bytes32Items.initItems(1);
-        eventData.bytes32Items.setItem(0, "pythLazerFeedId", pythLazerFeedId);
         eventData.boolItems.initItems(1);
         eventData.boolItems.setItem(0, "pythLazerFeedInverted", pythLazerFeedInverted);
-        eventData.uintItems.initItems(2);
-        eventData.uintItems.setItem(0, "pythLazerFeedMultiplier", pythLazerFeedMultiplier);
-        eventData.uintItems.setItem(1, "pythLazerFeedSpreadFactor", pythLazerFeedSpreadFactor);
+        eventData.uintItems.initItems(3);
+        eventData.uintItems.setItem(0, "pythLazerFeedId", pythLazerFeedId);
+        eventData.uintItems.setItem(1, "pythLazerFeedMultiplier", pythLazerFeedMultiplier);
+        eventData.uintItems.setItem(2, "pythLazerFeedSpreadFactor", pythLazerFeedSpreadFactor);
         eventEmitter.emitEventLog1(
             "SetPythLazerFeed",
             actionKey,
@@ -554,7 +553,7 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
 
     function setPythLazerFeedAfterSignal(
         address token,
-        bytes32 pythLazerFeedId,
+        uint256 pythLazerFeedId,
         bool pythLazerFeedInverted,
         uint256 pythLazerFeedMultiplier,
         uint256 pythLazerFeedSpreadFactor
@@ -569,7 +568,9 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
 
         _validateAndClearAction(actionKey, "setPythLazerFeed");
 
-        dataStore.setBytes32(Keys.pythLazerFeedIdKey(token), pythLazerFeedId);
+        // 112: feedId is read by PythLazerFeedProvider via getUint, so it must be written with setUint —
+        // setBytes32 lands in a different DataStore mapping and the provider reads back 0.
+        dataStore.setUint(Keys.pythLazerFeedIdKey(token), pythLazerFeedId);
         dataStore.setBool(Keys.pythLazerFeedInvertedKey(token), pythLazerFeedInverted);
         dataStore.setUint(Keys.pythLazerFeedMultiplierKey(token), pythLazerFeedMultiplier);
         dataStore.setUint(Keys.pythLazerFeedSpreadFactorKey(token), pythLazerFeedSpreadFactor);
@@ -577,13 +578,12 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
         EventUtils.EventLogData memory eventData;
         eventData.addressItems.initItems(1);
         eventData.addressItems.setItem(0, "token", token);
-        eventData.bytes32Items.initItems(1);
-        eventData.bytes32Items.setItem(0, "pythLazerFeedId", pythLazerFeedId);
         eventData.boolItems.initItems(1);
         eventData.boolItems.setItem(0, "pythLazerFeedInverted", pythLazerFeedInverted);
-        eventData.uintItems.initItems(2);
-        eventData.uintItems.setItem(0, "pythLazerFeedMultiplier", pythLazerFeedMultiplier);
-        eventData.uintItems.setItem(1, "pythLazerFeedSpreadFactor", pythLazerFeedSpreadFactor);
+        eventData.uintItems.initItems(3);
+        eventData.uintItems.setItem(0, "pythLazerFeedId", pythLazerFeedId);
+        eventData.uintItems.setItem(1, "pythLazerFeedMultiplier", pythLazerFeedMultiplier);
+        eventData.uintItems.setItem(2, "pythLazerFeedSpreadFactor", pythLazerFeedSpreadFactor);
         eventEmitter.emitEventLog1(
             "SetPythLazerFeed",
             actionKey,
@@ -687,7 +687,7 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
 
     function _setPythLazerFeedActionKey(
         address token,
-        bytes32 pythLazerFeedId,
+        uint256 pythLazerFeedId,
         bool pythLazerFeedInverted,
         uint256 pythLazerFeedMultiplier,
         uint256 pythLazerFeedSpreadFactor
