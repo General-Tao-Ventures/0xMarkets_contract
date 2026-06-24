@@ -457,11 +457,32 @@ const commodityMarketOverrides: Partial<BaseMarketConfig> = {
 };
 
 const cryptoMarketOverrides: Partial<BaseMarketConfig> = {
-  positionFeeFactorForPositiveImpact: percentageToFloat("0.02%"),
-  positionFeeFactorForNegativeImpact: percentageToFloat("0.025%"),
+  positionFeeFactorForPositiveImpact: percentageToFloat("0.03%"),
+  positionFeeFactorForNegativeImpact: percentageToFloat("0.04%"),
+
+  openInterestReserveFactor: percentageToFloat("60%"),
+
+  negativePositionImpactFactor: exponentToFloat("8e-8"),
+  positivePositionImpactFactor: exponentToFloat("1e-7"),
+  positionImpactExponentFactor: exponentToFloat("1.45e0"),
+
+  negativeMaxPositionImpactFactor: decimalToFloat(1),
+  positiveMaxPositionImpactFactor: decimalToFloat(1),
+  maxPositionImpactFactorForLiquidations: decimalToFloat(1),
+
+  liquidationFeeFactor: decimalToFloat(1),
+
+  borrowingFactor: exponentToFloat("5.6e-10").div(SECONDS_PER_DAY),
+  borrowingExponentFactor: exponentToFloat("1.73e0"),
+
+  maxPnlFactorForTraders: bigNumberify(0),
+  maxPnlFactorForAdl: bigNumberify(0),
+  minPnlFactorAfterAdl: bigNumberify(0),
+  maxPnlFactorForDeposits: bigNumberify(0),
+  maxPnlFactorForWithdrawals: bigNumberify(0),
 
   maxLeverage: decimalToFloat(100),
-  minLeverage: 0,
+  minLeverage: decimalToFloat(1),
 
   leverageLadder: cryptoLeverageLadder,
 };
@@ -632,8 +653,8 @@ const config: {
       reversed: false,
       ...syntheticMarketConfig,
       ...cryptoMarketOverrides,
-      maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
+      maxLongTokenPoolAmount: expandDecimals(100_000_000_000, 6), // 100B USD0
+      maxShortTokenPoolAmount: expandDecimals(100_000_000_000, 6), // 100B USD0
       maxPoolUsdForDeposit: decimalToFloat(1_000_000_000), // 1B USD
       maxOpenInterestForLongs: decimalToFloat(50_000_000),
       maxOpenInterestForShorts: decimalToFloat(50_000_000),
@@ -643,8 +664,8 @@ const config: {
       reversed: false,
       ...syntheticMarketConfig,
       ...cryptoMarketOverrides,
-      maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
+      maxLongTokenPoolAmount: expandDecimals(100_000_000_000, 6), // 100B USD0
+      maxShortTokenPoolAmount: expandDecimals(100_000_000_000, 6), // 100B USD0
       maxPoolUsdForDeposit: decimalToFloat(1_000_000_000), // 1B USD
       maxOpenInterestForLongs: decimalToFloat(50_000_000),
       maxOpenInterestForShorts: decimalToFloat(50_000_000),
@@ -655,8 +676,8 @@ const config: {
       reversed: false,
       ...syntheticMarketConfig,
       ...cryptoMarketOverrides,
-      maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
+      maxLongTokenPoolAmount: expandDecimals(100_000_000_000, 6), // 100B USD0
+      maxShortTokenPoolAmount: expandDecimals(100_000_000_000, 6), // 100B USD0
       maxPoolUsdForDeposit: decimalToFloat(1_000_000_000), // 1B USD
       maxOpenInterestForLongs: decimalToFloat(50_000_000),
       maxOpenInterestForShorts: decimalToFloat(50_000_000),
