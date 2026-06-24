@@ -2,6 +2,7 @@ import { expect } from "chai";
 
 import { deployFixture } from "../../utils/fixture";
 import { handleDeposit } from "../../utils/deposit";
+import { getSupplyOf } from "../../utils/token";
 import { prices } from "../../utils/prices";
 import { expandDecimals, decimalToFloat, percentageToFloat } from "../../utils/math";
 import * as keys from "../../utils/keys";
@@ -54,6 +55,12 @@ describe("Reader insurance fund getters", () => {
       // Simulate a snapshot directly. The SettlementHandler tests cover the
       // real entrypoint; here we focus on the Reader composition.
       await dataStore.setUint(keys.insuranceFundEpochPoolValueKey(ethUsdMarket.marketToken), decimalToFloat(6_000_000));
+      // Pair the supply snapshot (drawdown is measured per-share). The pool-amount drop below does not
+      // burn shares, so epochSupply == currentSupply and the per-share drawdown equals the absolute one.
+      await dataStore.setUint(
+        keys.insuranceFundEpochSupplyKey(ethUsdMarket.marketToken),
+        await getSupplyOf(ethUsdMarket.marketToken)
+      );
       const epochStartTs = Math.floor(Date.now() / 1000);
       await dataStore.setUint(keys.insuranceFundEpochStartKey(ethUsdMarket.marketToken), epochStartTs);
 
