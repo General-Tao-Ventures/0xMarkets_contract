@@ -286,18 +286,25 @@ library PositionPricingUtils {
         uint256 nextLongOpenInterest = longOpenInterest;
         uint256 nextShortOpenInterest = shortOpenInterest;
 
+        // with single token markets, because getOpenInterest is rounded down when divided by two
+        // it is possible for the usdDelta to exceed the calculated open interest
+        // to prevent reverts here, nextLongOpenInterest / nextShortOpenInterest is set to 0 for this case.
+        // This restores upstream GMX's clamp (ZEROMARK-483): an interim GMX commit had reverted here
+        // instead, which bricks full close / liquidation / ADL on our single-token (longToken==shortToken)
+        // markets. The negative-OI case is separately validated in applyDeltaToOpenInterest, so clamping
+        // to 0 here is safe.
         if (params.isLong) {
             if (params.usdDelta < 0 && (-params.usdDelta).toUint256() > longOpenInterest) {
-                revert Errors.UsdDeltaExceedsLongOpenInterest(params.usdDelta, longOpenInterest);
+                nextLongOpenInterest = 0;
+            } else {
+                nextLongOpenInterest = Calc.sumReturnUint256(longOpenInterest, params.usdDelta);
             }
-
-            nextLongOpenInterest = Calc.sumReturnUint256(longOpenInterest, params.usdDelta);
         } else {
             if (params.usdDelta < 0 && (-params.usdDelta).toUint256() > shortOpenInterest) {
-                revert Errors.UsdDeltaExceedsShortOpenInterest(params.usdDelta, shortOpenInterest);
+                nextShortOpenInterest = 0;
+            } else {
+                nextShortOpenInterest = Calc.sumReturnUint256(shortOpenInterest, params.usdDelta);
             }
-
-            nextShortOpenInterest = Calc.sumReturnUint256(shortOpenInterest, params.usdDelta);
         }
 
         OpenInterestParams memory openInterestParams = OpenInterestParams(
