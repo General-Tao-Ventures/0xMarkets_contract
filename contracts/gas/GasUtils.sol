@@ -288,6 +288,35 @@ library GasUtils {
         return (maxExecutionFee, executionFeeDiff);
     }
 
+    // @dev ZEROMARK-44: cap the execution fee at the MAX (multiplier * gasLimit * basefee) WITHOUT the
+    // minimum-fee validation. The protocol waives the minimum execution fee (keepers are subsidised
+    // out-of-band — the "execution fee exemption"), so validateAndCapExecutionFee's min-revert can't be
+    // used here. But the MAX cap must still apply to subaccount / relay orders carrying a callbackContract:
+    // otherwise a malicious subaccount can set a huge executionFee carved from the victim's WNT collateral
+    // and reclaim it to an attacker-chosen callbackContract on cancel. Returns the capped fee plus the
+    // excess to route to the holding address.
+    function capExecutionFee(
+        DataStore dataStore,
+        uint256 estimatedGasLimit,
+        uint256 executionFee,
+        uint256 oraclePriceCount
+    ) internal view returns (uint256, uint256) {
+        uint256 gasLimit = adjustGasLimitForEstimate(dataStore, estimatedGasLimit, oraclePriceCount);
+
+        // some blockchains may not support EIP-1559 and will return 0 for block.basefee;
+        // block.basefee is also 0 inside eth_call / eth_estimateGas
+        uint256 basefee = block.basefee != 0 ? block.basefee : tx.gasprice;
+        uint256 maxExecutionFee = Precision.applyFactor(gasLimit * basefee, dataStore.getUint(Keys.MAX_EXECUTION_FEE_MULTIPLIER_FACTOR));
+
+        // maxExecutionFee == 0 only in a fee-less simulation (basefee and tx.gasprice both 0); don't cap to
+        // 0 there, as a real on-chain cancel always has a non-zero basefee where the cap bounds the loss.
+        if (maxExecutionFee == 0 || executionFee <= maxExecutionFee) {
+            return (executionFee, 0);
+        }
+
+        return (maxExecutionFee, executionFee - maxExecutionFee);
+    }
+
     function transferExcessiveExecutionFee(DataStore dataStore, EventEmitter eventEmitter, Bank bank, address account, uint256 executionFeeDiff) external {
         address wnt = TokenUtils.wnt(dataStore);
         address holdingAddress = dataStore.getAddress(Keys.HOLDING_ADDRESS);

@@ -262,9 +262,16 @@ describe("SubaccountRouter", () => {
     expect(order.addresses.receiver).eq(user0.address);
     expect(order.numbers.initialCollateralDeltaAmount).eq(expandDecimals(100, 6));
 
-    // 0.1 WETH in total
-    // expect(order.numbers.executionFee).eq("2411100480000000");
-    // await expectBalance(wnt.address, user2.address, "97588899520000000");
+    // ZEROMARK-44: this subaccount order carries a callbackContract (params.addresses.callbackContract),
+    // so shouldCapMaxExecutionFee is true and the oversized 0.1 WETH execution fee is capped to the
+    // gas-based max; the excess is routed to the HOLDING_ADDRESS (user2) instead of remaining as a
+    // refundable fee a malicious subaccount could reclaim to its callback on cancel.
+    expect(order.numbers.executionFee).lt(expandDecimals(1, 17)); // capped below the supplied 0.1 WETH
+    expect(order.numbers.executionFee).gt(0);
+    const excessToHolding = await wnt.balanceOf(user2.address); // user2 == HOLDING_ADDRESS
+    expect(excessToHolding).gt(0);
+    // conservation: capped fee + excess routed to holding == the supplied 0.1 WETH
+    expect(order.numbers.executionFee.add(excessToHolding)).eq(expandDecimals(1, 17));
 
     expect(
       await dataStore.getUint(

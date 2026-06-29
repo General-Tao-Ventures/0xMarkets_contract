@@ -178,18 +178,21 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
         cache.receivedWnt = orderVault.recordTransferIn(cache.wnt);
 
         // ! EXECUTION FEE EXEMPTION
-        // cache.estimatedGasLimit = GasUtils.estimateExecuteOrderGasLimit(dataStore, order);
-        // cache.oraclePriceCount = GasUtils.estimateOrderOraclePriceCount(order.swapPath().length);
-        // (uint256 executionFee, uint256 executionFeeDiff) = GasUtils.validateAndCapExecutionFee(
-        //     dataStore,
-        //     cache.estimatedGasLimit,
-        //     order.executionFee() + cache.receivedWnt,
-        //     cache.oraclePriceCount,
-        //     shouldCapMaxExecutionFee
-        // );
-        // order.setExecutionFee(executionFee);
-
-        (uint256 executionFee, uint256 executionFeeDiff) = (order.executionFee() + cache.receivedWnt, 0);
+        // Minimum-fee validation waived (keepers subsidised out-of-band), so validateAndCapExecutionFee is
+        // not used. The MAX cap is still enforced for subaccount / relay updates carrying a callbackContract
+        // (shouldCapMaxExecutionFee): otherwise a malicious subaccount could raise the executionFee on an
+        // existing order with the victim's topped-up WNT and reclaim it to an attacker callbackContract on
+        // cancel (ZEROMARK-44). Excess over the cap is returned to the holding address.
+        uint256 executionFee = order.executionFee() + cache.receivedWnt;
+        uint256 executionFeeDiff = 0;
+        if (shouldCapMaxExecutionFee) {
+            (executionFee, executionFeeDiff) = GasUtils.capExecutionFee(
+                dataStore,
+                GasUtils.estimateExecuteOrderGasLimit(dataStore, order),
+                order.executionFee() + cache.receivedWnt,
+                GasUtils.estimateOrderOraclePriceCount(order.swapPath().length)
+            );
+        }
         order.setExecutionFee(executionFee);
 
         if (executionFeeDiff != 0) {
