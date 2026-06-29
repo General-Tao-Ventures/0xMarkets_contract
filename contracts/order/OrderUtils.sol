@@ -167,7 +167,7 @@ library OrderUtils {
         // used. The MAX cap is still enforced for subaccount / relay orders carrying a callbackContract
         // (shouldCapMaxExecutionFee) — otherwise a malicious subaccount could set a huge executionFee
         // carved from the victim's WNT and reclaim it to an attacker callbackContract on cancel
-        // (ZEROMARK-44). Excess over the cap is returned to the holding address. Normal orders (no
+        // . Excess over the cap is returned to the holding address. Normal orders (no
         // callback) keep the gasless, uncapped behaviour.
         uint256 executionFee = params.numbers.executionFee;
         if (shouldCapMaxExecutionFee) {

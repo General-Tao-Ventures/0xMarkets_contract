@@ -262,7 +262,7 @@ describe("SubaccountRouter", () => {
     expect(order.addresses.receiver).eq(user0.address);
     expect(order.numbers.initialCollateralDeltaAmount).eq(expandDecimals(100, 6));
 
-    // ZEROMARK-44: this subaccount order carries a callbackContract (params.addresses.callbackContract),
+    // this subaccount order carries a callbackContract (params.addresses.callbackContract),
     // so shouldCapMaxExecutionFee is true and the oversized 0.1 WETH execution fee is capped to the
     // gas-based max; the excess is routed to the HOLDING_ADDRESS (user2) instead of remaining as a
     // refundable fee a malicious subaccount could reclaim to its callback on cancel.

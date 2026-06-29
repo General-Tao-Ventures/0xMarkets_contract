@@ -182,7 +182,7 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
         // not used. The MAX cap is still enforced for subaccount / relay updates carrying a callbackContract
         // (shouldCapMaxExecutionFee): otherwise a malicious subaccount could raise the executionFee on an
         // existing order with the victim's topped-up WNT and reclaim it to an attacker callbackContract on
-        // cancel (ZEROMARK-44). Excess over the cap is returned to the holding address.
+        // cancel. Excess over the cap is returned to the holding address.
         uint256 executionFee = order.executionFee() + cache.receivedWnt;
         uint256 executionFeeDiff = 0;
         if (shouldCapMaxExecutionFee) {
