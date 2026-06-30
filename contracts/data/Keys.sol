@@ -545,6 +545,7 @@ library Keys {
     bytes32 public constant PYTH_LAZER_FEED_MULTIPLIER = keccak256(abi.encode("PYTH_LAZER_FEED_MULTIPLIER"));
     // @dev key for Pyth Lazer feed per-token spread factor applied to confidence (FLOAT_PRECISION-scaled)
     bytes32 public constant PYTH_LAZER_FEED_SPREAD_FACTOR = keccak256(abi.encode("PYTH_LAZER_FEED_SPREAD_FACTOR"));
+    bytes32 public constant PYTH_HERMES_FEED_MULTIPLIER = keccak256(abi.encode("PYTH_HERMES_FEED_MULTIPLIER"));
 
 
     // @dev function used to calculate fullKey for a given market parameter
@@ -2373,6 +2374,16 @@ library Keys {
     function pythLazerFeedSpreadFactorKey(address token) internal pure returns (bytes32) {
         return keccak256(abi.encode(
             PYTH_LAZER_FEED_SPREAD_FACTOR,
+            token
+        ));
+    }
+
+    // @dev key for Pyth Hermes feed per-token decimal multiplier
+    // @param token the token to get the key for
+    // @return key for Pyth Hermes feed multiplier
+    function pythHermesFeedMultiplierKey(address token) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            PYTH_HERMES_FEED_MULTIPLIER,
             token
         ));
     }
