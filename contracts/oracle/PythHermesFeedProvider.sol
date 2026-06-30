@@ -12,7 +12,7 @@ import "./OracleUtils.sol";
 // @title PythHermesFeedProvider
 // @dev Stateless oracle provider that decodes Pyth Hermes price data
 // passed by the keeper as ABI-encoded (uint256 price, uint256 conf, int32 expo, uint256 publishTime)
-// and returns a ValidatedPrice in GMX's FLOAT_PRECISION (10^30) domain.
+// and returns a ValidatedPrice in FLOAT_PRECISION (10^30) domain.
 //
 // No signature verification. The handler's onlyController modifier ensures only the keeper
 // can trigger this path.
