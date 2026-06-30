@@ -162,20 +162,24 @@ library OrderUtils {
         CallbackUtils.validateCallbackGasLimit(dataStore, order.callbackGasLimit());
 
         // ! EXECUTION FEE EXEMPTION
-        // cache.estimatedGasLimit = GasUtils.estimateExecuteOrderGasLimit(dataStore, order);
-        // cache.oraclePriceCount = GasUtils.estimateOrderOraclePriceCount(params.addresses.swapPath.length);
-        // uint256 executionFee;
-        // (executionFee, cache.executionFeeDiff) = GasUtils.validateAndCapExecutionFee(
-        //     dataStore,
-        //     cache.estimatedGasLimit,
-        //     params.numbers.executionFee,
-        //     cache.oraclePriceCount,
-        //     shouldCapMaxExecutionFee
-        // );
-        // order.setExecutionFee(executionFee);
-
-        uint256 executionFee;
-        (executionFee, cache.executionFeeDiff) = (params.numbers.executionFee, 0);
+        // The minimum-execution-fee validation is intentionally waived (keepers are subsidised
+        // out-of-band), so the full validateAndCapExecutionFee (which reverts below the minimum) is not
+        // used. The MAX cap is still enforced for subaccount / relay orders carrying a callbackContract
+        // (shouldCapMaxExecutionFee) — otherwise a malicious subaccount could set a huge executionFee
+        // carved from the victim's WNT and reclaim it to an attacker callbackContract on cancel
+        // . Excess over the cap is returned to the holding address. Normal orders (no
+        // callback) keep the gasless, uncapped behaviour.
+        uint256 executionFee = params.numbers.executionFee;
+        if (shouldCapMaxExecutionFee) {
+            cache.estimatedGasLimit = GasUtils.estimateExecuteOrderGasLimit(dataStore, order);
+            cache.oraclePriceCount = GasUtils.estimateOrderOraclePriceCount(params.addresses.swapPath.length);
+            (executionFee, cache.executionFeeDiff) = GasUtils.capExecutionFee(
+                dataStore,
+                cache.estimatedGasLimit,
+                params.numbers.executionFee,
+                cache.oraclePriceCount
+            );
+        }
         order.setExecutionFee(executionFee);
 
         if (cache.executionFeeDiff != 0) {
