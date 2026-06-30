@@ -294,6 +294,7 @@ export const PYTH_LAZER_FEED_ID = hashString("PYTH_LAZER_FEED_ID");
 export const PYTH_LAZER_FEED_INVERTED = hashString("PYTH_LAZER_FEED_INVERTED");
 export const PYTH_LAZER_FEED_MULTIPLIER = hashString("PYTH_LAZER_FEED_MULTIPLIER");
 export const PYTH_LAZER_FEED_SPREAD_FACTOR = hashString("PYTH_LAZER_FEED_SPREAD_FACTOR");
+export const PYTH_HERMES_FEED_MULTIPLIER = hashString("PYTH_HERMES_FEED_MULTIPLIER");
 
 export function accountDepositListKey(account) {
   return hashData(["bytes32", "address"], [ACCOUNT_DEPOSIT_LIST, account]);
@@ -927,4 +928,8 @@ export function pythLazerFeedMultiplierKey(token: string) {
 
 export function pythLazerFeedSpreadFactorKey(token: string) {
   return hashData(["bytes32", "address"], [PYTH_LAZER_FEED_SPREAD_FACTOR, token]);
+}
+
+export function pythHermesFeedMultiplierKey(token: string) {
+  return hashData(["bytes32", "address"], [PYTH_HERMES_FEED_MULTIPLIER, token]);
 }
