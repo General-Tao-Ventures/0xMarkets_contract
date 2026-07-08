@@ -311,9 +311,11 @@ library ExecuteDepositUtils {
 
         // ! EXECUTION FEE EXEMPTION
         // Keeper is subsidised out-of-band (payExecutionFee is not called), but
-        // any fee sent with the deposit is refunded to the receiver on success
-        // so it is not stranded in the vault (ZEROMARK-8). No-op when the fee is
-        // zero. Symmetric with the cancellation path.
+        // any fee sent with the deposit is refunded to the depositor (account) on
+        // success so it is not stranded in the vault (ZEROMARK-8). Refund goes to
+        // account, not receiver: a first deposit forces receiver == address(1), so
+        // refunding to receiver would strand the fee. No-op when the fee is zero.
+        // Symmetric with the cancellation path.
         GasUtils.refundExecutionFee(
             params.dataStore,
             params.eventEmitter,
@@ -321,7 +323,7 @@ library ExecuteDepositUtils {
             params.key,
             deposit.callbackContract(),
             deposit.executionFee(),
-            deposit.receiver()
+            deposit.account()
         );
 
         return cache.receivedMarketTokens;
