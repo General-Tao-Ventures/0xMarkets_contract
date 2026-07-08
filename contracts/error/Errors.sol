@@ -33,6 +33,7 @@ library Errors {
     error OracleProviderAlreadyExistsForToken(address token);
     error PriceFeedAlreadyExistsForToken(address token);
     error DataStreamIdAlreadyExistsForToken(address token);
+    error PythLazerFeedIdAlreadyExistsForToken(address token);
     error MaxFundingFactorPerSecondLimitExceeded(uint256 maxFundingFactorPerSecond, uint256 limit);
 
     // ContributorHandler errors
@@ -240,6 +241,7 @@ library Errors {
     error EmptyPythLazerFeedData(address token);
     error EmptyPythLazerFeedId(address token);
     error EmptyPythLazerFeedMultiplier(address token);
+    error EmptyPythHermesFeedMultiplier(address token);
     error InvalidPythLazerScaledConfidence(address token, uint256 scaledConfidence, uint256 price);
     error StaleOraclePrice(address token, uint256 publishedTimestamp, uint256 storedTimestamp);
 
@@ -355,6 +357,7 @@ library Errors {
     error InvalidClaimCollateralInput(uint256 marketsLength, uint256 tokensLength, uint256 timeKeysLength);
     error InvalidClaimAffiliateRewardsInput(uint256 marketsLength, uint256 tokensLength);
     error InvalidClaimUiFeesInput(uint256 marketsLength, uint256 tokensLength);
+    error InvalidClaimFeesInput(uint256 marketsLength, uint256 tokensLength);
 
     // SwapUtils errors
     error InvalidTokenIn(address tokenIn, address market);

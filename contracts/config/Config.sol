@@ -105,6 +105,9 @@ contract Config is ReentrancyGuard, RoleModule, BasicMulticall {
         if (dataStore.getBytes32(Keys.dataStreamIdKey(token)) != bytes32(0)) {
             revert Errors.DataStreamIdAlreadyExistsForToken(token);
         }
+        if (dataStore.getUint(Keys.pythLazerFeedIdKey(token)) != 0) {
+            revert Errors.PythLazerFeedIdAlreadyExistsForToken(token);
+        }
 
         ConfigValidatorUtils.validateRange(
             dataStore,
@@ -134,13 +137,16 @@ contract Config is ReentrancyGuard, RoleModule, BasicMulticall {
 
     function setPythLazerFeed(
         address token,
-        bytes32 pythLazerFeedId,
+        uint256 pythLazerFeedId,
         bool pythLazerFeedInverted,
         uint256 pythLazerFeedMultiplier,
         uint256 pythLazerFeedSpreadFactor
     ) external onlyConfigKeeper nonReentrant {
         if (dataStore.getBytes32(Keys.dataStreamIdKey(token)) != bytes32(0)) {
             revert Errors.DataStreamIdAlreadyExistsForToken(token);
+        }
+        if (dataStore.getUint(Keys.pythLazerFeedIdKey(token)) != 0) {
+            revert Errors.PythLazerFeedIdAlreadyExistsForToken(token);
         }
 
         ConfigValidatorUtils.validateRange(
@@ -150,20 +156,20 @@ contract Config is ReentrancyGuard, RoleModule, BasicMulticall {
             pythLazerFeedSpreadFactor
         );
 
-        dataStore.setBytes32(Keys.dataStreamIdKey(token), pythLazerFeedId);
-        dataStore.setBool(Keys.dataStreamInvertedKey(token), pythLazerFeedInverted);
-        dataStore.setUint(Keys.dataStreamMultiplierKey(token), pythLazerFeedMultiplier);
+        dataStore.setUint(Keys.pythLazerFeedIdKey(token), pythLazerFeedId);
+        dataStore.setBool(Keys.pythLazerFeedInvertedKey(token), pythLazerFeedInverted);
+        dataStore.setUint(Keys.pythLazerFeedMultiplierKey(token), pythLazerFeedMultiplier);
         dataStore.setUint(Keys.pythLazerFeedSpreadFactorKey(token), pythLazerFeedSpreadFactor);
 
         EventUtils.EventLogData memory eventData;
-        // eventData.addressItems.initItems(1);
-        // eventData.addressItems.setItem(0, "token", token);
-        // eventData.bytes32Items.initItems(1);
-        // eventData.bytes32Items.setItem(0, "pythLazerFeedId", pythLazerFeedId);
-        // eventData.boolItems.initItems(1);
-        // eventData.boolItems.setItem(0, "pythLazerFeedInverted", pythLazerFeedInverted);
-        // eventData.uintItems.initItems(1);
-        // eventData.uintItems.setItem(0, "pythLazerFeedMultiplier", pythLazerFeedMultiplier);
+        eventData.addressItems.initItems(1);
+        eventData.addressItems.setItem(0, "token", token);
+        eventData.boolItems.initItems(1);
+        eventData.boolItems.setItem(0, "pythLazerFeedInverted", pythLazerFeedInverted);
+        eventData.uintItems.initItems(3);
+        eventData.uintItems.setItem(0, "pythLazerFeedId", pythLazerFeedId);
+        eventData.uintItems.setItem(1, "pythLazerFeedMultiplier", pythLazerFeedMultiplier);
+        eventData.uintItems.setItem(2, "pythLazerFeedSpreadFactor", pythLazerFeedSpreadFactor);
 
         eventEmitter.emitEventLog1("ConfigSetPythLazerFeed", Cast.toBytes32(token), eventData);
     }

@@ -1,7 +1,7 @@
 import { expect } from "chai";
 
 import { deployFixture } from "../../utils/fixture";
-import { expandDecimals, decimalToFloat } from "../../utils/math";
+import { expandDecimals, decimalToFloat, FLOAT_PRECISION } from "../../utils/math";
 import { printGasUsage } from "../../utils/gas";
 import { handleDeposit } from "../../utils/deposit";
 import { OrderType, getOrderCount, getOrderKeys, getAutoCancelOrderKeys, createOrder } from "../../utils/order";
@@ -209,5 +209,141 @@ describe("Exchange.UpdateOrder", () => {
     expect(order.numbers.validFromTime).eq(newValidFromTime);
 
     expect(await getAutoCancelOrderKeys(dataStore, positionKey, 0, 10)).eql([]);
+  });
+
+  // createOrder inverts trigger/acceptable prices on reversed
+  // markets, but updateOrder used to write raw user-domain prices, executing the
+  // order immediately at the wrong price. updateOrder must mirror the inversion.
+  it("updateOrder inverts trigger/acceptable prices on reversed markets", async () => {
+    // invert(p) = FLOAT_PRECISION^2 / p, matching OrderHandler.createOrder.
+    const invert = (p) => FLOAT_PRECISION.mul(FLOAT_PRECISION).div(p);
+
+    const triggerPriceInput = expandDecimals(5050, 12);
+    const acceptablePriceInput = expandDecimals(4950, 12);
+
+    const createParams = {
+      market: ethUsdMarket,
+      initialCollateralToken: wnt,
+      initialCollateralDeltaAmount: expandDecimals(10, 18),
+      swapPath: [ethUsdMarket.marketToken],
+      sizeDeltaUsd: decimalToFloat(200 * 1000),
+      triggerPrice: expandDecimals(5000, 12),
+      acceptablePrice: expandDecimals(5001, 12),
+      executionFee,
+      minOutputAmount: expandDecimals(50000, 6),
+      orderType: OrderType.StopLossDecrease,
+      isLong: true,
+      shouldUnwrapNativeToken: false,
+    };
+    await createOrder(fixture, createParams);
+    const orderKeys = await getOrderKeys(dataStore, 0, 1);
+
+    // Flag the market as reversed (mirrors MarketStoreUtils' REVERSED slot).
+    await dataStore.setBool(keys.reversedKey(ethUsdMarket.marketToken), true);
+
+    await wnt.mint(orderVault.address, "700");
+
+    await exchangeRouter
+      .connect(user0)
+      .updateOrder(
+        orderKeys[0],
+        decimalToFloat(250 * 1000),
+        acceptablePriceInput,
+        triggerPriceInput,
+        expandDecimals(52000, 6),
+        0,
+        false
+      );
+
+    const order = await reader.getOrder(dataStore.address, orderKeys[0]);
+    // Stored prices are inverted into the internal (reversed) domain.
+    expect(order.numbers.triggerPrice).eq(invert(triggerPriceInput));
+    expect(order.numbers.acceptablePrice).eq(invert(acceptablePriceInput));
+    // Sanity: the stored values are NOT the raw user inputs (the pre-fix bug).
+    expect(order.numbers.triggerPrice).to.not.eq(triggerPriceInput);
+    expect(order.numbers.acceptablePrice).to.not.eq(acceptablePriceInput);
+  });
+
+  // Control: non-reversed markets must keep storing the raw prices unchanged.
+  it("updateOrder leaves prices unchanged on non-reversed markets", async () => {
+    const createParams = {
+      market: ethUsdMarket,
+      initialCollateralToken: wnt,
+      initialCollateralDeltaAmount: expandDecimals(10, 18),
+      swapPath: [ethUsdMarket.marketToken],
+      sizeDeltaUsd: decimalToFloat(200 * 1000),
+      triggerPrice: expandDecimals(5000, 12),
+      acceptablePrice: expandDecimals(5001, 12),
+      executionFee,
+      minOutputAmount: expandDecimals(50000, 6),
+      orderType: OrderType.StopLossDecrease,
+      isLong: true,
+      shouldUnwrapNativeToken: false,
+    };
+    await createOrder(fixture, createParams);
+    const orderKeys = await getOrderKeys(dataStore, 0, 1);
+
+    await wnt.mint(orderVault.address, "700");
+
+    const triggerPriceInput = expandDecimals(5050, 12);
+    const acceptablePriceInput = expandDecimals(4950, 12);
+    await exchangeRouter
+      .connect(user0)
+      .updateOrder(
+        orderKeys[0],
+        decimalToFloat(250 * 1000),
+        acceptablePriceInput,
+        triggerPriceInput,
+        expandDecimals(52000, 6),
+        0,
+        false
+      );
+
+    const order = await reader.getOrder(dataStore.address, orderKeys[0]);
+    expect(order.numbers.triggerPrice).eq(triggerPriceInput);
+    expect(order.numbers.acceptablePrice).eq(acceptablePriceInput);
+  });
+
+  // CursorBot: the reversed-market fix loads the market in updateOrder; it must NOT enforce the
+  // enabled gate, otherwise an order on a later-disabled market could no longer be updated (or
+  // unfrozen / have its execution fee topped up) even though cancellation should still work.
+  it("updateOrder does not require the market to be enabled (order on a disabled market is still updatable)", async () => {
+    const createParams = {
+      market: ethUsdMarket,
+      initialCollateralToken: wnt,
+      initialCollateralDeltaAmount: expandDecimals(10, 18),
+      swapPath: [ethUsdMarket.marketToken],
+      sizeDeltaUsd: decimalToFloat(200 * 1000),
+      triggerPrice: expandDecimals(5000, 12),
+      acceptablePrice: expandDecimals(5001, 12),
+      executionFee,
+      minOutputAmount: expandDecimals(50000, 6),
+      orderType: OrderType.StopLossDecrease,
+      isLong: true,
+      shouldUnwrapNativeToken: false,
+    };
+    await createOrder(fixture, createParams);
+    const orderKeys = await getOrderKeys(dataStore, 0, 1);
+
+    // Disable the market AFTER the order exists.
+    await dataStore.setBool(keys.isMarketDisabledKey(ethUsdMarket.marketToken), true);
+
+    await wnt.mint(orderVault.address, "700");
+
+    // Must not revert with DisabledMarket.
+    await exchangeRouter
+      .connect(user0)
+      .updateOrder(
+        orderKeys[0],
+        decimalToFloat(250 * 1000),
+        expandDecimals(5001, 12),
+        expandDecimals(5000, 12),
+        expandDecimals(52000, 6),
+        0,
+        false
+      );
+
+    const order = await reader.getOrder(dataStore.address, orderKeys[0]);
+    expect(order.numbers.sizeDeltaUsd).eq(decimalToFloat(250 * 1000));
   });
 });

@@ -180,7 +180,10 @@ library IncreasePositionUtils {
                 prices,
                 params.order.isLong()
             );
+        }
 
+
+        {
             PositionUtils.WillPositionCollateralBeSufficientValues memory positionValues = PositionUtils.WillPositionCollateralBeSufficientValues(
                 params.position.sizeInUsd(), // positionSizeInUsd
                 params.position.collateralAmount(), // positionCollateralAmount

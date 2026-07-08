@@ -180,6 +180,8 @@ library Keys {
     bytes32 public constant CLAIM_AFFILIATE_REWARDS_FEATURE_DISABLED = keccak256(abi.encode("CLAIM_AFFILIATE_REWARDS_FEATURE_DISABLED"));
     // @dev key for whether the claim ui fees feature is disabled
     bytes32 public constant CLAIM_UI_FEES_FEATURE_DISABLED = keccak256(abi.encode("CLAIM_UI_FEES_FEATURE_DISABLED"));
+    // @dev key for whether the claim (per-receiver protocol) fees feature is disabled
+    bytes32 public constant CLAIM_FEES_FEATURE_DISABLED = keccak256(abi.encode("CLAIM_FEES_FEATURE_DISABLED"));
     // @dev key for whether the subaccount feature is disabled
     bytes32 public constant SUBACCOUNT_FEATURE_DISABLED = keccak256(abi.encode("SUBACCOUNT_FEATURE_DISABLED"));
     // @dev key for whether the gasless feature is disabled
@@ -230,6 +232,9 @@ library Keys {
     bytes32 public constant INSURANCE_FUND_BALANCE = keccak256(abi.encode("INSURANCE_FUND_BALANCE"));
     // @dev per-market USD snapshot of poolValueExcludingUnrealizedPnl at the last epoch start.
     bytes32 public constant INSURANCE_FUND_EPOCH_POOL_VALUE = keccak256(abi.encode("INSURANCE_FUND_EPOCH_POOL_VALUE"));
+    // @dev per-market MarketToken supply snapshot at the last epoch start, paired with
+    // INSURANCE_FUND_EPOCH_POOL_VALUE so drawdown is measured per-share (not on absolute pool value).
+    bytes32 public constant INSURANCE_FUND_EPOCH_SUPPLY = keccak256(abi.encode("INSURANCE_FUND_EPOCH_SUPPLY"));
     // @dev per-market timestamp of the last epoch start. Treat the fund as disabled
     // when this is zero (first epoch) or older than INSURANCE_FUND_MAX_EPOCH_AGE.
     bytes32 public constant INSURANCE_FUND_EPOCH_START = keccak256(abi.encode("INSURANCE_FUND_EPOCH_START"));
@@ -540,6 +545,7 @@ library Keys {
     bytes32 public constant PYTH_LAZER_FEED_MULTIPLIER = keccak256(abi.encode("PYTH_LAZER_FEED_MULTIPLIER"));
     // @dev key for Pyth Lazer feed per-token spread factor applied to confidence (FLOAT_PRECISION-scaled)
     bytes32 public constant PYTH_LAZER_FEED_SPREAD_FACTOR = keccak256(abi.encode("PYTH_LAZER_FEED_SPREAD_FACTOR"));
+    bytes32 public constant PYTH_HERMES_FEED_MULTIPLIER = keccak256(abi.encode("PYTH_HERMES_FEED_MULTIPLIER"));
 
 
     // @dev function used to calculate fullKey for a given market parameter
@@ -976,6 +982,15 @@ library Keys {
         ));
     }
 
+    // @dev key for whether claim (per-receiver protocol) fees is disabled
+    // @param the claim fees module
+    function claimFeesFeatureDisabledKey(address module) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            CLAIM_FEES_FEATURE_DISABLED,
+            module
+        ));
+    }
+
     // @dev key for whether subaccounts are disabled
     // @param the subaccount module
     function subaccountFeatureDisabledKey(address module) internal pure returns (bytes32) {
@@ -1296,6 +1311,14 @@ library Keys {
     function insuranceFundEpochPoolValueKey(address market) internal pure returns (bytes32) {
         return keccak256(abi.encode(
             INSURANCE_FUND_EPOCH_POOL_VALUE,
+            market
+        ));
+    }
+
+    // @dev per-market MarketToken supply snapshot at last epoch start
+    function insuranceFundEpochSupplyKey(address market) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            INSURANCE_FUND_EPOCH_SUPPLY,
             market
         ));
     }
@@ -2351,6 +2374,16 @@ library Keys {
     function pythLazerFeedSpreadFactorKey(address token) internal pure returns (bytes32) {
         return keccak256(abi.encode(
             PYTH_LAZER_FEED_SPREAD_FACTOR,
+            token
+        ));
+    }
+
+    // @dev key for Pyth Hermes feed per-token decimal multiplier
+    // @param token the token to get the key for
+    // @return key for Pyth Hermes feed multiplier
+    function pythHermesFeedMultiplierKey(address token) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            PYTH_HERMES_FEED_MULTIPLIER,
             token
         ));
     }

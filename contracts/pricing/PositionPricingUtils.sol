@@ -286,18 +286,25 @@ library PositionPricingUtils {
         uint256 nextLongOpenInterest = longOpenInterest;
         uint256 nextShortOpenInterest = shortOpenInterest;
 
+        // with single token markets, because getOpenInterest is rounded down when divided by two
+        // it is possible for the usdDelta to exceed the calculated open interest
+        // to prevent reverts here, nextLongOpenInterest / nextShortOpenInterest is set to 0 for this case.
+        // This restores upstream GMX's clamp (ZEROMARK-483): an interim GMX commit had reverted here
+        // instead, which bricks full close / liquidation / ADL on our single-token (longToken==shortToken)
+        // markets. The negative-OI case is separately validated in applyDeltaToOpenInterest, so clamping
+        // to 0 here is safe.
         if (params.isLong) {
             if (params.usdDelta < 0 && (-params.usdDelta).toUint256() > longOpenInterest) {
-                revert Errors.UsdDeltaExceedsLongOpenInterest(params.usdDelta, longOpenInterest);
+                nextLongOpenInterest = 0;
+            } else {
+                nextLongOpenInterest = Calc.sumReturnUint256(longOpenInterest, params.usdDelta);
             }
-
-            nextLongOpenInterest = Calc.sumReturnUint256(longOpenInterest, params.usdDelta);
         } else {
             if (params.usdDelta < 0 && (-params.usdDelta).toUint256() > shortOpenInterest) {
-                revert Errors.UsdDeltaExceedsShortOpenInterest(params.usdDelta, shortOpenInterest);
+                nextShortOpenInterest = 0;
+            } else {
+                nextShortOpenInterest = Calc.sumReturnUint256(shortOpenInterest, params.usdDelta);
             }
-
-            nextShortOpenInterest = Calc.sumReturnUint256(shortOpenInterest, params.usdDelta);
         }
 
         OpenInterestParams memory openInterestParams = OpenInterestParams(
@@ -558,6 +565,30 @@ library PositionPricingUtils {
         fees.totalDiscountAmount = fees.pro.traderDiscountAmount > fees.referral.traderDiscountAmount
             ? fees.pro.traderDiscountAmount
             : fees.referral.traderDiscountAmount;
+
+        // guarantee fees.positionFeeAmount - affiliateReward - totalDiscount never underflows,
+        // regardless of how proDiscountFactor / minAffiliateRewardFactor / referral factors
+        // are configured. the existing clamp on lines 542-551 trades min affiliate vs total
+        // rebate but does not enforce the global invariant (sum <= positionFeeAmount).
+        //
+        // primary scenario (per ZEROMARK-264): a high proDiscountFactor paired with a
+        // referral code that floors adjustedAffiliateRewardFactor at minAffiliateRewardFactor
+        // yields totalDiscountAmount + affiliateRewardAmount > positionFeeAmount.
+        // secondary safeguard: a misconfigured proDiscountFactor > FLOAT_PRECISION makes
+        // totalDiscountAmount alone exceed positionFeeAmount.
+        //
+        // preference: preserve the trader discount (what the user signed up for), shrink the
+        // affiliate reward, let protocolFeeAmount fall to zero. keeps isPositionLiquidatable
+        // and decrease paths alive when admin config is misaligned.
+        if (fees.totalDiscountAmount > fees.positionFeeAmount) {
+            fees.totalDiscountAmount = fees.positionFeeAmount;
+        }
+        uint256 maxAffiliateRewardAmount = fees.positionFeeAmount - fees.totalDiscountAmount;
+        if (fees.referral.affiliateRewardAmount > maxAffiliateRewardAmount) {
+            fees.referral.affiliateRewardAmount = maxAffiliateRewardAmount;
+            fees.referral.totalRebateAmount = fees.referral.affiliateRewardAmount + fees.referral.traderDiscountAmount;
+        }
+
         fees.protocolFeeAmount = fees.positionFeeAmount - fees.referral.affiliateRewardAmount - fees.totalDiscountAmount;
 
         fees.positionFeeVeAlphaFactor = dataStore.getUint(Keys.POSITION_FEE_VEALPHA_FACTOR);

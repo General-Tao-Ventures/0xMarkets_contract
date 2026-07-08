@@ -164,6 +164,7 @@ export const INSURANCE_FUND_ADDRESS = hashString("INSURANCE_FUND_ADDRESS");
 export const INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR = hashString("INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR");
 export const INSURANCE_FUND_BALANCE = hashString("INSURANCE_FUND_BALANCE");
 export const INSURANCE_FUND_EPOCH_POOL_VALUE = hashString("INSURANCE_FUND_EPOCH_POOL_VALUE");
+export const INSURANCE_FUND_EPOCH_SUPPLY = hashString("INSURANCE_FUND_EPOCH_SUPPLY");
 export const INSURANCE_FUND_EPOCH_START = hashString("INSURANCE_FUND_EPOCH_START");
 export const INSURANCE_FUND_MAX_EPOCH_AGE = hashString("INSURANCE_FUND_MAX_EPOCH_AGE");
 export const INSURANCE_FUND_EPOCH_LENGTH = hashString("INSURANCE_FUND_EPOCH_LENGTH");
@@ -293,6 +294,7 @@ export const PYTH_LAZER_FEED_ID = hashString("PYTH_LAZER_FEED_ID");
 export const PYTH_LAZER_FEED_INVERTED = hashString("PYTH_LAZER_FEED_INVERTED");
 export const PYTH_LAZER_FEED_MULTIPLIER = hashString("PYTH_LAZER_FEED_MULTIPLIER");
 export const PYTH_LAZER_FEED_SPREAD_FACTOR = hashString("PYTH_LAZER_FEED_SPREAD_FACTOR");
+export const PYTH_HERMES_FEED_MULTIPLIER = hashString("PYTH_HERMES_FEED_MULTIPLIER");
 
 export function accountDepositListKey(account) {
   return hashData(["bytes32", "address"], [ACCOUNT_DEPOSIT_LIST, account]);
@@ -538,6 +540,13 @@ export function collateralSumKey(market: string, collateralToken: string, isLong
   return hashData(["bytes32", "address", "address", "bool"], [COLLATERAL_SUM, market, collateralToken, isLong]);
 }
 
+export const REVERSED = hashString("REVERSED");
+
+// Mirrors MarketStoreUtils: keccak256(abi.encode(marketToken, REVERSED)).
+export function reversedKey(market: string) {
+  return hashData(["address", "bytes32"], [market, REVERSED]);
+}
+
 export function poolAmountKey(market: string, token: string) {
   return hashData(["bytes32", "address", "address"], [POOL_AMOUNT, market, token]);
 }
@@ -640,6 +649,10 @@ export function insuranceFundBalanceKey(market: string, token: string) {
 
 export function insuranceFundEpochPoolValueKey(market: string) {
   return hashData(["bytes32", "address"], [INSURANCE_FUND_EPOCH_POOL_VALUE, market]);
+}
+
+export function insuranceFundEpochSupplyKey(market: string) {
+  return hashData(["bytes32", "address"], [INSURANCE_FUND_EPOCH_SUPPLY, market]);
 }
 
 export function insuranceFundEpochStartKey(market: string) {
@@ -915,4 +928,8 @@ export function pythLazerFeedMultiplierKey(token: string) {
 
 export function pythLazerFeedSpreadFactorKey(token: string) {
   return hashData(["bytes32", "address"], [PYTH_LAZER_FEED_SPREAD_FACTOR, token]);
+}
+
+export function pythHermesFeedMultiplierKey(token: string) {
+  return hashData(["bytes32", "address"], [PYTH_HERMES_FEED_MULTIPLIER, token]);
 }

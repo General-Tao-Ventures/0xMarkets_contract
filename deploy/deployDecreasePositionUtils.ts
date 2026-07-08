@@ -14,6 +14,7 @@ const func = createDeployFunction({
     "ReferralEventUtils",
     "DecreasePositionCollateralUtils",
     "DecreasePositionSwapUtils",
+    "InsuranceFundUtils",
   ],
 });
 
