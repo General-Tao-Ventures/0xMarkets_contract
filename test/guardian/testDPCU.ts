@@ -70,9 +70,10 @@ describe("Guardian.DecreasePositionCollateralUtils", () => {
     expect(await getPositionCount(dataStore)).eq(0);
   });
 
-  it("getEmptyFees and execution succeeds", async () => {
+  it("Secondary output token pays fees: fees are distributed and execution succeeds", async () => {
     // Goal: Get to else case of
     // (collateralCache.result.remainingCostUsd == 0 && collateralCache.result.amountPaidInSecondaryOutputToken == 0)
+    // where the fee is fully paid but part of it comes from the secondary output token,
     // and pass execution (avoid liquidation check failure)
 
     // This can be done by having a profit, so that even if collateral remaining is 0,
@@ -99,7 +100,7 @@ describe("Guardian.DecreasePositionCollateralUtils", () => {
     expect(await getPoolAmount(dataStore, ethUsdMarket.marketToken, wnt.address)).eq(expandDecimals(1000, 18));
     expect(await getPoolAmount(dataStore, ethUsdMarket.marketToken, usdc.address)).eq(expandDecimals(1_000_000, 6));
 
-    // Position fee factor set which will be emptied on getEmptyFees
+    // Position fee factor set; the fee ends up paid partly from the secondary (WNT) output token
     await dataStore.setUint(keys.positionFeeFactorKey(ethUsdMarket.marketToken, false), decimalToFloat(5, 2)); // 5%
 
     // Because of Positive PnL, order passes validatePosition
@@ -118,10 +119,11 @@ describe("Guardian.DecreasePositionCollateralUtils", () => {
         precisions: [8, 18],
         afterExecution: async ({ logs }) => {
           const feeInfo = getEventData(logs, "PositionFeesCollected");
-          // Fees are emptied.
-          expect(feeInfo.protocolFeeAmount).eq("0");
-          expect(feeInfo.positionFeeFactor).eq("0");
-          expect(feeInfo.positionFeeAmountForPool).eq("0");
+          // The fee is fully paid (partly from the secondary output token), so it is now
+          // reported and credited normally instead of being zeroed via getEmptyFees.
+          expect(feeInfo.protocolFeeAmount).eq(expandDecimals(25_000, 6));
+          expect(feeInfo.positionFeeFactor).eq(decimalToFloat(5, 2));
+          expect(feeInfo.positionFeeAmountForPool).eq(expandDecimals(25_000, 6));
         },
       },
     });
