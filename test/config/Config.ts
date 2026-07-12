@@ -69,6 +69,20 @@ describe("Config", () => {
       .withArgs(keys.POOL_AMOUNT);
   });
 
+  // ZEROMARK-684: the live Data Stream oracle keys must not be reachable through the generic,
+  // un-delayed setter — changes flow only through the timelocked signalSetDataStream path.
+  it("reverts for timelock-only Data Stream keys via the generic setter (ZEROMARK-684)", async () => {
+    await expect(config.connect(user0).setBool(keys.DATA_STREAM_INVERTED, encodeData(["address"], [wnt.address]), true))
+      .to.be.revertedWithCustomError(errorsContract, "InvalidBaseKey")
+      .withArgs(keys.DATA_STREAM_INVERTED);
+
+    await expect(
+      config.connect(user0).setUint(keys.DATA_STREAM_SPREAD_REDUCTION_FACTOR, encodeData(["address"], [wnt.address]), 0)
+    )
+      .to.be.revertedWithCustomError(errorsContract, "InvalidBaseKey")
+      .withArgs(keys.DATA_STREAM_SPREAD_REDUCTION_FACTOR);
+  });
+
   // it("allows LIMITED_CONFIG_KEEPER to set allowedLimitedBaseKeys", async () => {
   //   expect(await dataStore.getAddress(keys.HOLDING_ADDRESS)).eq(AddressZero);
   //   await config.connect(user0).setAddress(keys.HOLDING_ADDRESS, "0x", user1.address);
@@ -408,41 +422,46 @@ describe("Config", () => {
     const data = encodeData(["address"], [ethUsdMarket.marketToken]);
 
     // MMR is a maintenance ratio: > 100% is rejected.
-    await expect(
-      config.setUint(keys.MAX_MMR, data, decimalToFloat(1).add(1))
-    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+    await expect(config.setUint(keys.MAX_MMR, data, decimalToFloat(1).add(1))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
 
     // A valid 20% ceiling.
     await config.setUint(keys.MAX_MMR, data, percentageToFloat("20%"));
 
     // minMmr must not exceed maxMmr (the misconfig the clamp ordering used to mishandle).
-    await expect(
-      config.setUint(keys.MIN_MMR, data, percentageToFloat("30%"))
-    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+    await expect(config.setUint(keys.MIN_MMR, data, percentageToFloat("30%"))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
 
     // ZEROMARK-149 guardrail: minMmr is the absolute floor of the maintenance buffer, so 0 (which
     // would let a low-leverage position's mmr clamp to zero → no buffer → liquidate only once
     // insolvent → LP loss) is rejected.
-    await expect(
-      config.setUint(keys.MIN_MMR, data, 0)
-    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+    await expect(config.setUint(keys.MIN_MMR, data, 0)).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
 
     // A valid 10% floor goes through.
     await config.setUint(keys.MIN_MMR, data, percentageToFloat("10%"));
 
     // Leverage is FLOAT_PRECISION-scaled (1x == FLOAT_PRECISION); below 1x is rejected.
-    await expect(
-      config.setUint(keys.MAX_LEVERAGE, data, decimalToFloat(1).sub(1))
-    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+    await expect(config.setUint(keys.MAX_LEVERAGE, data, decimalToFloat(1).sub(1))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
 
     await config.setUint(keys.MAX_LEVERAGE, data, decimalToFloat(100)); // 100x ok
 
     // minLeverage is opt-in: 0 ("no lower bound") must be accepted — it's the deployed default for
     // most markets. A non-zero value below 1x is still rejected.
     await config.setUint(keys.MIN_LEVERAGE, data, 0);
-    await expect(
-      config.setUint(keys.MIN_LEVERAGE, data, decimalToFloat(1).sub(1))
-    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+    await expect(config.setUint(keys.MIN_LEVERAGE, data, decimalToFloat(1).sub(1))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
     await config.setUint(keys.MIN_LEVERAGE, data, decimalToFloat(2)); // 2x ok
   });
 
@@ -481,12 +500,19 @@ describe("Config", () => {
 
   it("validates data stream spread reduction factor", async () => {
     const p100 = percentageToFloat("100%");
+    // ZEROMARK-684: DATA_STREAM_SPREAD_REDUCTION_FACTOR is no longer reachable through the generic
+    // setUint (timelock-only); its range is still validated on the dedicated setDataStream path.
+    // Use a fresh token so the "feed already exists" guard does not short-circuit before validateRange.
+    const token = ethers.Wallet.createRandom().address;
+    const feedId = hashString("feedId");
+    const multiplier = expandDecimals(1, 34);
 
-    await expect(
-      config.setUint(keys.DATA_STREAM_SPREAD_REDUCTION_FACTOR, encodeData(["address"], [wnt.address]), p100.add(1))
-    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+    await expect(config.setDataStream(token, feedId, false, multiplier, p100.add(1))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
 
-    await config.setUint(keys.DATA_STREAM_SPREAD_REDUCTION_FACTOR, encodeData(["address"], [wnt.address]), p100);
+    await config.setDataStream(token, feedId, false, multiplier, p100);
   });
 
   it("validates LIQUIDATION_FEE_VALIDATOR + INSURANCE sum ≤ 100%", async () => {

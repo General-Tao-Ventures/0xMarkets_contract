@@ -234,8 +234,12 @@ describe("PythLazerFeedProvider", () => {
       from: oracle.address,
     });
     const { min, max } = decodeValidatedPrice(result);
-    const expectedMin = BigNumber.from(100_000_000 - 50_000).mul(multiplier).div(FLOAT_PRECISION);
-    const expectedMax = BigNumber.from(100_000_000 + 50_000).mul(multiplier).div(FLOAT_PRECISION);
+    const expectedMin = BigNumber.from(100_000_000 - 50_000)
+      .mul(multiplier)
+      .div(FLOAT_PRECISION);
+    const expectedMax = BigNumber.from(100_000_000 + 50_000)
+      .mul(multiplier)
+      .div(FLOAT_PRECISION);
     expect(min).to.eq(expectedMin);
     expect(max).to.eq(expectedMax);
   });

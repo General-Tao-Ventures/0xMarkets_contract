@@ -214,7 +214,10 @@ describe("MarketUtils", () => {
 
       // Configure a single-tier ladder capping this notional at 50x (half the global max).
       await dataStore.setUint(keys.leverageLadderTierCountKey(ethUsdMarket.marketToken), 1);
-      await dataStore.setUint(keys.leverageLadderMaxNotionalKey(ethUsdMarket.marketToken, 0), decimalToFloat(1_000_000));
+      await dataStore.setUint(
+        keys.leverageLadderMaxNotionalKey(ethUsdMarket.marketToken, 0),
+        decimalToFloat(1_000_000)
+      );
       await dataStore.setUint(keys.leverageLadderMaxLeverageKey(ethUsdMarket.marketToken, 0), decimalToFloat(50));
 
       // $1M / $10k = 100x. Without the ladder this equals the global max → raw = tuning = 0.5%

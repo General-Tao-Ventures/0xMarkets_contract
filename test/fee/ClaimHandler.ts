@@ -69,21 +69,24 @@ describe("ClaimHandler", () => {
   });
 
   it("pull: a receiver claims its own accrued protocol fees to a destination", async () => {
-    const accrued = await getClaimableFeeAmount(dataStore, ethUsdMarket.marketToken, wnt.address, veAlphaReceiver.address);
+    const accrued = await getClaimableFeeAmount(
+      dataStore,
+      ethUsdMarket.marketToken,
+      wnt.address,
+      veAlphaReceiver.address
+    );
     expect(accrued).eq(expandDecimals(5, 15)); // 0.005 ETH
 
     const destination = fixture.accounts.user6.address;
     const balBefore = await wnt.balanceOf(destination);
 
-    await claimHandler
-      .connect(veAlphaReceiver)
-      .claimFees([ethUsdMarket.marketToken], [wnt.address], destination);
+    await claimHandler.connect(veAlphaReceiver).claimFees([ethUsdMarket.marketToken], [wnt.address], destination);
 
     expect(await wnt.balanceOf(destination)).eq(balBefore.add(accrued));
     // claimable is zeroed after the claim
-    expect(
-      await getClaimableFeeAmount(dataStore, ethUsdMarket.marketToken, wnt.address, veAlphaReceiver.address)
-    ).eq(0);
+    expect(await getClaimableFeeAmount(dataStore, ethUsdMarket.marketToken, wnt.address, veAlphaReceiver.address)).eq(
+      0
+    );
   });
 
   it("pull: a caller only sweeps fees keyed to its own address (others untouched)", async () => {
@@ -100,16 +103,16 @@ describe("ClaimHandler", () => {
       .connect(treasuryReceiver)
       .claimFees([ethUsdMarket.marketToken], [wnt.address], treasuryReceiver.address);
 
-    expect(
-      await getClaimableFeeAmount(dataStore, ethUsdMarket.marketToken, wnt.address, treasuryReceiver.address)
-    ).eq(0);
+    expect(await getClaimableFeeAmount(dataStore, ethUsdMarket.marketToken, wnt.address, treasuryReceiver.address)).eq(
+      0
+    );
     // veAlpha + buyback still credited
-    expect(
-      await getClaimableFeeAmount(dataStore, ethUsdMarket.marketToken, wnt.address, veAlphaReceiver.address)
-    ).eq(expandDecimals(5, 15));
-    expect(
-      await getClaimableFeeAmount(dataStore, ethUsdMarket.marketToken, wnt.address, buybackReceiver.address)
-    ).eq(expandDecimals(2, 15));
+    expect(await getClaimableFeeAmount(dataStore, ethUsdMarket.marketToken, wnt.address, veAlphaReceiver.address)).eq(
+      expandDecimals(5, 15)
+    );
+    expect(await getClaimableFeeAmount(dataStore, ethUsdMarket.marketToken, wnt.address, buybackReceiver.address)).eq(
+      expandDecimals(2, 15)
+    );
   });
 
   it("push: a FEE_KEEPER routes a receiver's fees to that receiver", async () => {
@@ -131,9 +134,9 @@ describe("ClaimHandler", () => {
 
     // funds land at the rightful receiver, not at the keeper
     expect(await wnt.balanceOf(buybackReceiver.address)).eq(balBefore.add(accrued));
-    expect(
-      await getClaimableFeeAmount(dataStore, ethUsdMarket.marketToken, wnt.address, buybackReceiver.address)
-    ).eq(0);
+    expect(await getClaimableFeeAmount(dataStore, ethUsdMarket.marketToken, wnt.address, buybackReceiver.address)).eq(
+      0
+    );
   });
 
   it("push: reverts when the caller is not a FEE_KEEPER", async () => {
