@@ -206,7 +206,10 @@ library DepositUtils {
                 deposit.longTokenSwapPath().length + deposit.shortTokenSwapPath().length
             ),
             keeper,
-            deposit.receiver()
+            // Refund the residual execution fee to the depositor (account), not the market-token
+            // receiver: a first deposit forces receiver == RECEIVER_FOR_FIRST_DEPOSIT (address(1)),
+            // so refunding to receiver would strand the fee at address(1). Symmetric with execution.
+            deposit.account()
         );
     }
 }
