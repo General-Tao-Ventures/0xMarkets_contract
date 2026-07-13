@@ -126,12 +126,12 @@ library ConfigValidatorUtils {
             }
         }
 
-        // if (baseKey == Keys.LIQUIDATION_FEE_FACTOR) {
-        //     // revert if value > 1%
-        //     if (value > Precision.FLOAT_PRECISION / 100) {
-        //         revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
-        //     }
-        // }
+        // fat-finger ceiling on the liquidation fee; the intended value is 20%, cap at 30%
+        if (baseKey == Keys.LIQUIDATION_FEE_FACTOR) {
+            if (value > (30 * Precision.FLOAT_PRECISION) / 100) {
+                revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+            }
+        }
 
         // Dynamic-MMR risk params : these were writable to any uint with no bounds.
         // MMR factors are maintenance ratios (<= 100%); minMmr must not exceed maxMmr (else the
@@ -139,7 +139,8 @@ library ConfigValidatorUtils {
         // (1x == FLOAT_PRECISION); minLeverage must not exceed maxLeverage. Cross-checks read the
         // paired key and skip when it is still unset (0) so first-time configuration is unordered.
         if (baseKey == Keys.MAX_MMR) {
-            if (value > Precision.FLOAT_PRECISION) {
+            // a 100%+ maintenance ratio force-liquidates even solvent positions
+            if (value >= Precision.FLOAT_PRECISION) {
                 revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
             }
             uint256 minMmr = dataStore.getUint(Keys.getFullKey(Keys.MIN_MMR, data));
@@ -157,7 +158,8 @@ library ConfigValidatorUtils {
             if (value == 0) {
                 revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
             }
-            if (value > Precision.FLOAT_PRECISION) {
+            // same 100% ceiling as maxMmr; a 100% floor force-liquidates every position
+            if (value >= Precision.FLOAT_PRECISION) {
                 revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
             }
             uint256 maxMmr = dataStore.getUint(Keys.getFullKey(Keys.MAX_MMR, data));
@@ -281,11 +283,14 @@ library ConfigValidatorUtils {
         }
 
         // Drawdown trigger factor: type(uint256).max is the off-sentinel
-        // (operators set this to disable the fund on a market). Otherwise
-        // value must be ≤ 100% so the threshold is a fraction of pool USD.
+        // (operators set this to disable the fund on a market). Otherwise the
+        // value must sit in [1%, 100%] of pool USD: the ceiling keeps it a
+        // fraction, the floor stops a dust trigger firing on any drawdown.
         if (baseKey == Keys.INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR) {
-            if (value != type(uint256).max && value > Precision.FLOAT_PRECISION) {
-                revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+            if (value != type(uint256).max) {
+                if (value > Precision.FLOAT_PRECISION || value < Precision.FLOAT_PRECISION / 100) {
+                    revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
+                }
             }
         }
 
