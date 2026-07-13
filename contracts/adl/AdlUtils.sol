@@ -9,7 +9,6 @@ import "../order/OrderStoreUtils.sol";
 import "../order/OrderEventUtils.sol";
 import "../position/PositionStoreUtils.sol";
 import "../nonce/NonceUtils.sol";
-import "../callback/CallbackUtils.sol";
 import "../market/Market.sol";
 import "../market/MarketUtils.sol";
 import "../oracle/Oracle.sol";
@@ -142,7 +141,10 @@ library AdlUtils {
             params.account, // account
             params.account, // receiver
             params.account, // cancellationReceiver
-            CallbackUtils.getSavedCallbackContract(params.dataStore, params.account, params.market), // callbackContract
+            // Forced ADL must NOT inherit the trader's saved callback: this order is built with
+            // executionFee == 0 and MAX_CALLBACK_GAS_LIMIT, so an inherited callback would let a trader
+            // dump unpaid callback gas onto the keeper during a forced deleverage (gas grief).
+            address(0), // callbackContract
             address(0), // uiFeeReceiver
             params.market, // market
             position.collateralToken(), // initialCollateralToken

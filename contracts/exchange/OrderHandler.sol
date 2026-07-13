@@ -245,7 +245,8 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
                 startingGas,
                 true, // isExternalCall
                 Keys.USER_INITIATED_CANCEL,
-                ""
+                "",
+                false // skipCallback: user cancellations keep their callback
             )
         );
     }
@@ -404,7 +405,8 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
                     startingGas,
                     true, // isExternalCall
                     reason,
-                    reasonBytes
+                    reasonBytes,
+                    false // skipCallback: normal cancellations keep their callback
                 )
             );
 

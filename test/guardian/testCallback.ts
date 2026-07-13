@@ -85,8 +85,10 @@ describe("Guardian.Callback", () => {
       maxPrices: [expandDecimals(4380, 4), expandDecimals(1, 6)],
     });
 
-    // Callback contract is called
-    expect(await mockCallbackReceiver.called()).to.eq(1);
+    // The saved callback must NOT fire on a forced liquidation: the liquidation order is now built with
+    // no callback (address(0)), so a trader cannot force unpaid callback gas onto the keeper during their
+    // own liquidation. (Previously this asserted eq(1) — the saved callback ran with MAX gas for free.)
+    expect(await mockCallbackReceiver.called()).to.eq(0);
 
     expect(await getAccountPositionCount(dataStore, user0.address)).to.eq(0);
 
@@ -123,8 +125,8 @@ describe("Guardian.Callback", () => {
       maxPrices: [expandDecimals(5620, 4), expandDecimals(1, 6)],
     });
 
-    // Callback is called again
+    // Still not called after the second forced liquidation — saved callbacks never run on liquidation.
     expect(await getAccountPositionCount(dataStore, user0.address)).to.eq(0);
-    expect(await mockCallbackReceiver.called()).to.eq(2);
+    expect(await mockCallbackReceiver.called()).to.eq(0);
   });
 });

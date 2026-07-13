@@ -43,6 +43,9 @@ library OrderUtils {
         bool isExternalCall;
         string reason;
         bytes reasonBytes;
+        // when true, cancelOrder skips the trader-selected cancellation callback (used by forced
+        // auto-cancel cleanup so a liquidation cannot run unpaid callback gas on the keeper)
+        bool skipCallback;
     }
 
     struct CreateOrderCache {
@@ -264,7 +267,12 @@ library OrderUtils {
         }
 
         EventUtils.EventLogData memory eventData;
-        CallbackUtils.afterOrderCancellation(params.key, order, eventData);
+        // Forced auto-cancel cleanup (skipCallback) must not run the trader's cancellation callback:
+        // auto-cancel children carry executionFee == 0, so during a liquidation-driven clear their
+        // callbacks would dump unpaid gas onto the keeper. User-initiated cancellations still fire it.
+        if (!params.skipCallback) {
+            CallbackUtils.afterOrderCancellation(params.key, order, eventData);
+        }
 
         GasUtils.payExecutionFee(
             params.dataStore,
@@ -351,7 +359,8 @@ library OrderUtils {
                     gasleft(), // startingGas
                     false, // isExternalCall
                     "AUTO_CANCEL", // reason
-                    "" // reasonBytes
+                    "", // reasonBytes
+                    true // skipCallback: forced cleanup must not run unpaid trader callbacks
                 )
             );
         }
