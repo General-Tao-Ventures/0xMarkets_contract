@@ -427,6 +427,16 @@ describe("Config", () => {
       "ConfigValueExceedsAllowedRange"
     );
 
+    // exactly 100% is also rejected: it force-liquidates even solvent positions
+    await expect(config.setUint(keys.MAX_MMR, data, decimalToFloat(1))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
+    await expect(config.setUint(keys.MIN_MMR, data, decimalToFloat(1))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
+
     // A valid 20% ceiling.
     await config.setUint(keys.MAX_MMR, data, percentageToFloat("20%"));
 
@@ -547,6 +557,51 @@ describe("Config", () => {
     await expect(
       config.connect(user0).setUint(keys.INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR, market, p100.add(1))
     ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+
+    // a dust-sized trigger below the 1% floor must revert (would inject on any drawdown)
+    await expect(
+      config.connect(user0).setUint(keys.INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR, market, percentageToFloat("1%").sub(1))
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+
+    // exactly 1% is accepted
+    await config.connect(user0).setUint(keys.INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR, market, percentageToFloat("1%"));
+  });
+
+  it("caps LIQUIDATION_FEE_FACTOR at 30%", async () => {
+    const market = encodeData(["address"], [ethUsdMarket.marketToken]);
+
+    // the intended 20% goes through
+    await config.connect(user0).setUint(keys.LIQUIDATION_FEE_FACTOR, market, percentageToFloat("20%"));
+
+    // exactly 30% (the fat-finger ceiling) is accepted
+    await config.connect(user0).setUint(keys.LIQUIDATION_FEE_FACTOR, market, percentageToFloat("30%"));
+
+    // anything above 30% reverts
+    await expect(
+      config.connect(user0).setUint(keys.LIQUIDATION_FEE_FACTOR, market, percentageToFloat("30%").add(1))
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+  });
+
+  it("validates setPriceFeed nonzero feed / multiplier / heartbeat", async () => {
+    const token = user1.address; // arbitrary token with no configured feed
+    const feed = user2.address;
+    const mult = expandDecimals(1, 44);
+    const heartbeat = 24 * 60 * 60;
+
+    await expect(
+      config.connect(user0).setPriceFeed(token, ethers.constants.AddressZero, mult, heartbeat, 0)
+    ).to.be.revertedWithCustomError(errorsContract, "EmptyChainlinkPriceFeed");
+
+    await expect(
+      config.connect(user0).setPriceFeed(token, feed, 0, heartbeat, 0)
+    ).to.be.revertedWithCustomError(errorsContract, "EmptyChainlinkPriceFeedMultiplier");
+
+    await expect(
+      config.connect(user0).setPriceFeed(token, feed, mult, 0, 0)
+    ).to.be.revertedWithCustomError(errorsContract, "EmptyChainlinkPriceFeedHeartbeat");
+
+    // valid config (stablePrice 0 is allowed) goes through
+    await config.connect(user0).setPriceFeed(token, feed, mult, heartbeat, 0);
   });
 
   it("validates POSITION_FEE_VEALPHA + TREASURY + BUYBACK sum ≤ 100%", async () => {
