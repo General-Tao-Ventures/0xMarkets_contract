@@ -76,6 +76,14 @@ describe("LeverageLadder.integration", () => {
       ).to.be.revertedWithCustomError(errorsContract, "LeverageLadderMisconfigured");
     });
 
+    it("rejects a zero max-leverage tier", async () => {
+      const v = validLadder();
+      v.leverages[1] = 0; // un-openable tier
+      await expect(
+        config.connect(user0).setLeverageLadder(market(), v.notionals, v.leverages)
+      ).to.be.revertedWithCustomError(errorsContract, "LeverageLadderMisconfigured");
+    });
+
     it("rejects a final tier whose maxNotionalUsd != MAX_UINT", async () => {
       const v = validLadder();
       v.notionals[v.notionals.length - 1] = expandDecimals(10_000_000, 30); // not catch-all

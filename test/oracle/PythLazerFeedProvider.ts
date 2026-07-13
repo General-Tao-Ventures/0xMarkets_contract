@@ -261,6 +261,27 @@ describe("PythLazerFeedProvider", () => {
     ).to.be.revertedWithCustomError(errorsContract, "PythLazerFeedIdAlreadyExistsForToken");
   });
 
+  it("rejects a pyth-lazer feed id of 0 or above uint32 max", async () => {
+    await grantRole(roleStore, user0.address, "CONFIG_KEEPER");
+    const token = usdc.address;
+
+    await expect(
+      config.connect(user0).setPythLazerFeed(token, 0, false, FLOAT_PRECISION, FLOAT_PRECISION)
+    ).to.be.revertedWithCustomError(errorsContract, "InvalidPythLazerFeedId");
+
+    // 2**32 is one past the on-wire uint32 range.
+    await expect(
+      config
+        .connect(user0)
+        .setPythLazerFeed(token, ethers.BigNumber.from(2).pow(32), false, FLOAT_PRECISION, FLOAT_PRECISION)
+    ).to.be.revertedWithCustomError(errorsContract, "InvalidPythLazerFeedId");
+
+    // uint32 max is accepted.
+    await config
+      .connect(user0)
+      .setPythLazerFeed(token, ethers.BigNumber.from(2).pow(32).sub(1), false, FLOAT_PRECISION, FLOAT_PRECISION);
+  });
+
   it("applies feed multiplier (the hardcoded exponent config) after confidence scaling", async () => {
     // raw feed values are 8dp; multiplier 1e22 normalizes to 30dp.
     // expected min = (price - confidence) * 1e22 / 1e30
