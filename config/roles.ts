@@ -24,8 +24,6 @@ const requiredRolesForContracts = {
     "ExchangeRouter",
     "SubaccountRouter",
     "GlvRouter",
-    "GelatoRelayRouter",
-    "SubaccountGelatoRelayRouter",
 
     "OrderHandler",
     "DepositHandler",
@@ -41,8 +39,6 @@ const requiredRolesForContracts = {
     "ExchangeRouter",
     "SubaccountRouter",
     "GlvRouter",
-    "GelatoRelayRouter",
-    "SubaccountGelatoRelayRouter",
   ],
   ROLE_ADMIN: ["Timelock"],
   CONFIG_KEEPER: ["ConfigSyncer"],

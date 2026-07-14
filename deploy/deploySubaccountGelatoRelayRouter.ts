@@ -24,6 +24,7 @@ const func = createDeployFunction({
   },
 });
 
-func.skip = async ({ network }: any) => network.name === "localhost";
+// gasless relay is unused; deploy only on the in-memory test network, never on a persistent chain
+func.skip = async ({ network }: any) => network.name !== "hardhat";
 
 export default func;
