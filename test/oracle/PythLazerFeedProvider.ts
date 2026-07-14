@@ -163,6 +163,27 @@ describe("PythLazerFeedProvider", () => {
     expect(max).to.eq(price);
   });
 
+  it("inverted feed round-trips to the correct index price with the inverted multiplier", async () => {
+    // JPY-like: 6 token decimals, 3 feed decimals, USD/JPY = 150.000 -> index token needs JPY/USD.
+    // Correct inverted multiplier is 10^(60 + tokenDecimals - feedDecimals) = 10^63.
+    await dataStore.setBool(keys.pythLazerFeedInvertedKey(wnt.address), true);
+    await dataStore.setUint(keys.pythLazerFeedSpreadFactorKey(wnt.address), 0);
+
+    const rawUsdJpy = 150_000; // 150.000 at 3 feed decimals
+
+    await dataStore.setUint(keys.pythLazerFeedMultiplierKey(wnt.address), expandDecimals(1, 63));
+    const correct = await getOraclePrice({ price: rawUsdJpy, confidence: 1000 });
+    // JPY/USD in GMX 30-decimal index terms: (1/150) * 1e(30-6) = 6.6667e21, not the 1e12-too-high value.
+    expect(correct.min).to.eq(BigNumber.from("6666666666666666666666"));
+    expect(correct.max).to.eq(BigNumber.from("6666666666666666666666"));
+
+    // the old uniform multiplier 10^(60 - tokenDecimals - feedDecimals) = 10^51 inflates it by exactly 1e12,
+    // which floors sizeInTokens to 0 for small positions.
+    await dataStore.setUint(keys.pythLazerFeedMultiplierKey(wnt.address), expandDecimals(1, 51));
+    const inflated = await getOraclePrice({ price: rawUsdJpy, confidence: 1000 });
+    expect(inflated.min.div(correct.min)).to.eq(expandDecimals(1, 12));
+  });
+
   it("reverts when scaled confidence reaches or exceeds the price", async () => {
     // confidence * sf / 1e30 = 50_000 * 3e33 / 1e30 = 150_000_000_000 >= price (100_000_000)
     await dataStore.setUint(keys.pythLazerFeedSpreadFactorKey(wnt.address), FLOAT_PRECISION.mul(3000));

@@ -126,9 +126,13 @@ async function main() {
       console.log(`  Feed ID already correct`);
     }
 
-    // 2. Set multiplier: 10^(60 - tokenDecimals - feedDecimals)
+    // 2. Set multiplier. The provider inverts as FLOAT_PRECISION^2 / (raw * multiplier), so an inverted
+    // feed needs the token-decimal term flipped (+tokenDecimals) or the inverted price is scaled by
+    // 10^(2*tokenDecimals) too high, flooring sizeInTokens to 0 for small positions.
     const multiplierKey = hashData(["bytes32", "address"], [PYTH_LAZER_FEED_MULTIPLIER, token.address]);
-    const exponent = 60 - token.tokenDecimals - token.feedDecimals;
+    const exponent = token.inverted
+      ? 60 + token.tokenDecimals - token.feedDecimals
+      : 60 - token.tokenDecimals - token.feedDecimals;
     const multiplier = ethers.BigNumber.from(10).pow(exponent);
     const currentMultiplier = await dataStore.getUint(multiplierKey);
     console.log(`  Multiplier: current=${currentMultiplier}, target=10^${exponent}`);
