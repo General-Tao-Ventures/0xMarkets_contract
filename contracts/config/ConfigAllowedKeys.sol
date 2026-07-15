@@ -205,8 +205,11 @@ library ConfigAllowedKeys {
         allowedBaseKeys[Keys.BUYBACK_MAX_PRICE_IMPACT_FACTOR] = true;
         allowedBaseKeys[Keys.BUYBACK_MAX_PRICE_AGE] = true;
 
-        allowedBaseKeys[Keys.DATA_STREAM_INVERTED] = true;
-        allowedBaseKeys[Keys.DATA_STREAM_SPREAD_REDUCTION_FACTOR] = true;
+        // DATA_STREAM_INVERTED and DATA_STREAM_SPREAD_REDUCTION_FACTOR are intentionally NOT allowlisted
+        // for the generic (un-delayed) Config.setBool/setUint path — they feed the live Data Stream oracle
+        // price, so changes must flow only through the timelocked Timelock.signalSetDataStream /
+        // setDataStreamAfterSignal (or the one-time Config.setDataStream for a not-yet-configured token).
+        // Same treatment as DATA_STREAM_ID / DATA_STREAM_MULTIPLIER.
 
         allowedBaseKeys[Keys.BASELINE_SWAP_LONGS_PAY_SHORTS] = true;
         allowedBaseKeys[Keys.BASELINE_SWAP_PER_DAY] = true;

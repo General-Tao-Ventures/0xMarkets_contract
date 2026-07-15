@@ -50,6 +50,7 @@ library Errors {
     error SignalTimeNotYetPassed(uint256 signalTime);
     error InvalidTimelockDelay(uint256 timelockDelay);
     error MaxTimelockDelayExceeded(uint256 timelockDelay);
+    error MinTimelockDelayNotMet(uint256 timelockDelay);
     error InvalidFeeReceiver(address receiver);
     error InvalidOracleSigner(address receiver);
 
@@ -217,6 +218,7 @@ library Errors {
     error GmMinPricesNotSorted(address token, uint256 price, uint256 prevPrice);
     error GmMaxPricesNotSorted(address token, uint256 price, uint256 prevPrice);
     error EmptyChainlinkPriceFeedMultiplier(address token);
+    error EmptyChainlinkPriceFeedHeartbeat(address token);
     error EmptyDataStreamMultiplier(address token);
     error InvalidDataStreamSpreadReductionFactor(address token, uint256 spreadReductionFactor);
     error InvalidFeedPrice(address token, int256 price);
@@ -243,6 +245,7 @@ library Errors {
     error EmptyPythLazerFeedMultiplier(address token);
     error EmptyPythHermesFeedMultiplier(address token);
     error InvalidPythLazerScaledConfidence(address token, uint256 scaledConfidence, uint256 price);
+    error InvalidPythLazerFeedId(address token, uint256 pythLazerFeedId);
     error StaleOraclePrice(address token, uint256 publishedTimestamp, uint256 storedTimestamp);
 
     // OracleModule errors

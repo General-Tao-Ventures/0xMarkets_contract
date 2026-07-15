@@ -27,6 +27,8 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
     using EnumerableValues for EnumerableSet.Bytes32Set;
 
     uint256 public constant MAX_TIMELOCK_DELAY = 5 days;
+    // floor the delay so it can't be deployed at a value that defeats the timelock
+    uint256 public constant MIN_TIMELOCK_DELAY = 1 days;
 
     DataStore public immutable dataStore;
     EventEmitter public immutable eventEmitter;
@@ -568,7 +570,7 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
 
         _validateAndClearAction(actionKey, "setPythLazerFeed");
 
-        // 112: feedId is read by PythLazerFeedProvider via getUint, so it must be written with setUint —
+        // ZEROMARK-112: feedId is read by PythLazerFeedProvider via getUint, so it must be written with setUint —
         // setBytes32 lands in a different DataStore mapping and the provider reads back 0.
         dataStore.setUint(Keys.pythLazerFeedIdKey(token), pythLazerFeedId);
         dataStore.setBool(Keys.pythLazerFeedInvertedKey(token), pythLazerFeedInverted);
@@ -746,6 +748,9 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
     function _validateTimelockDelay() internal view {
         if (timelockDelay > MAX_TIMELOCK_DELAY) {
             revert Errors.MaxTimelockDelayExceeded(timelockDelay);
+        }
+        if (timelockDelay < MIN_TIMELOCK_DELAY) {
+            revert Errors.MinTimelockDelayNotMet(timelockDelay);
         }
     }
 }

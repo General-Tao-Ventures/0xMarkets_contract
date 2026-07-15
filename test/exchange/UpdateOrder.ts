@@ -245,7 +245,15 @@ describe("Exchange.UpdateOrder", () => {
 
     await exchangeRouter
       .connect(user0)
-      .updateOrder(orderKeys[0], decimalToFloat(250 * 1000), acceptablePriceInput, triggerPriceInput, expandDecimals(52000, 6), 0, false);
+      .updateOrder(
+        orderKeys[0],
+        decimalToFloat(250 * 1000),
+        acceptablePriceInput,
+        triggerPriceInput,
+        expandDecimals(52000, 6),
+        0,
+        false
+      );
 
     const order = await reader.getOrder(dataStore.address, orderKeys[0]);
     // Stored prices are inverted into the internal (reversed) domain.
@@ -281,7 +289,15 @@ describe("Exchange.UpdateOrder", () => {
     const acceptablePriceInput = expandDecimals(4950, 12);
     await exchangeRouter
       .connect(user0)
-      .updateOrder(orderKeys[0], decimalToFloat(250 * 1000), acceptablePriceInput, triggerPriceInput, expandDecimals(52000, 6), 0, false);
+      .updateOrder(
+        orderKeys[0],
+        decimalToFloat(250 * 1000),
+        acceptablePriceInput,
+        triggerPriceInput,
+        expandDecimals(52000, 6),
+        0,
+        false
+      );
 
     const order = await reader.getOrder(dataStore.address, orderKeys[0]);
     expect(order.numbers.triggerPrice).eq(triggerPriceInput);
@@ -317,7 +333,15 @@ describe("Exchange.UpdateOrder", () => {
     // Must not revert with DisabledMarket.
     await exchangeRouter
       .connect(user0)
-      .updateOrder(orderKeys[0], decimalToFloat(250 * 1000), expandDecimals(5001, 12), expandDecimals(5000, 12), expandDecimals(52000, 6), 0, false);
+      .updateOrder(
+        orderKeys[0],
+        decimalToFloat(250 * 1000),
+        expandDecimals(5001, 12),
+        expandDecimals(5000, 12),
+        expandDecimals(52000, 6),
+        0,
+        false
+      );
 
     const order = await reader.getOrder(dataStore.address, orderKeys[0]);
     expect(order.numbers.sizeDeltaUsd).eq(decimalToFloat(250 * 1000));

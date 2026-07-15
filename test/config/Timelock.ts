@@ -11,11 +11,11 @@ import * as keys from "../../utils/keys";
 describe("Timelock", () => {
   let fixture;
   let timelockAdmin, timelockMultisig, user2, user3, signer0, signer9;
-  let timelock, dataStore, roleStore, oracleStore, wnt;
+  let timelock, dataStore, roleStore, oracleStore, eventEmitter, wnt;
 
   beforeEach(async () => {
     fixture = await deployFixture();
-    ({ timelock, dataStore, roleStore, oracleStore, wnt } = fixture.contracts);
+    ({ timelock, dataStore, roleStore, oracleStore, eventEmitter, wnt } = fixture.contracts);
     ({ user2, user3, signer0, signer9 } = fixture.accounts);
 
     timelockAdmin = fixture.accounts.user0;
@@ -61,6 +61,20 @@ describe("Timelock", () => {
     expect(await timelock.timelockDelay()).eq(1 * 24 * 60 * 60);
     await timelock.connect(timelockAdmin).increaseTimelockDelay(2 * 24 * 60 * 60);
     expect(await timelock.timelockDelay()).eq(2 * 24 * 60 * 60);
+  });
+
+  it("rejects deploying with a timelock delay below the 1 day floor", async () => {
+    const Timelock = await hre.ethers.getContractFactory("Timelock");
+    const args = [roleStore.address, dataStore.address, eventEmitter.address, oracleStore.address];
+
+    // below the floor reverts
+    await expect(Timelock.deploy(...args, 1 * 24 * 60 * 60 - 1)).to.be.revertedWithCustomError(
+      errorsContract,
+      "MinTimelockDelayNotMet"
+    );
+
+    // exactly the floor deploys
+    await Timelock.deploy(...args, 1 * 24 * 60 * 60);
   });
 
   it("addOracleSigner", async () => {

@@ -234,8 +234,12 @@ describe("PythLazerFeedProvider", () => {
       from: oracle.address,
     });
     const { min, max } = decodeValidatedPrice(result);
-    const expectedMin = BigNumber.from(100_000_000 - 50_000).mul(multiplier).div(FLOAT_PRECISION);
-    const expectedMax = BigNumber.from(100_000_000 + 50_000).mul(multiplier).div(FLOAT_PRECISION);
+    const expectedMin = BigNumber.from(100_000_000 - 50_000)
+      .mul(multiplier)
+      .div(FLOAT_PRECISION);
+    const expectedMax = BigNumber.from(100_000_000 + 50_000)
+      .mul(multiplier)
+      .div(FLOAT_PRECISION);
     expect(min).to.eq(expectedMin);
     expect(max).to.eq(expectedMax);
   });
@@ -255,6 +259,27 @@ describe("PythLazerFeedProvider", () => {
     await expect(
       config.connect(user0).setDataStream(token, ethers.utils.formatBytes32String("feed"), false, FLOAT_PRECISION, 0)
     ).to.be.revertedWithCustomError(errorsContract, "PythLazerFeedIdAlreadyExistsForToken");
+  });
+
+  it("rejects a pyth-lazer feed id of 0 or above uint32 max", async () => {
+    await grantRole(roleStore, user0.address, "CONFIG_KEEPER");
+    const token = usdc.address;
+
+    await expect(
+      config.connect(user0).setPythLazerFeed(token, 0, false, FLOAT_PRECISION, FLOAT_PRECISION)
+    ).to.be.revertedWithCustomError(errorsContract, "InvalidPythLazerFeedId");
+
+    // 2**32 is one past the on-wire uint32 range.
+    await expect(
+      config
+        .connect(user0)
+        .setPythLazerFeed(token, ethers.BigNumber.from(2).pow(32), false, FLOAT_PRECISION, FLOAT_PRECISION)
+    ).to.be.revertedWithCustomError(errorsContract, "InvalidPythLazerFeedId");
+
+    // uint32 max is accepted.
+    await config
+      .connect(user0)
+      .setPythLazerFeed(token, ethers.BigNumber.from(2).pow(32).sub(1), false, FLOAT_PRECISION, FLOAT_PRECISION);
   });
 
   it("applies feed multiplier (the hardcoded exponent config) after confidence scaling", async () => {

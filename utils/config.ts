@@ -25,6 +25,11 @@ export const EXCLUDED_CONFIG_KEYS = {
   CUMULATIVE_BORROWING_FACTOR_UPDATED_AT: true,
   DATA_STREAM_ID: true,
   DATA_STREAM_MULTIPLIER: true,
+  // DATA_STREAM_INVERTED / DATA_STREAM_SPREAD_REDUCTION_FACTOR feed the live Data Stream oracle price;
+  // set only via Config.setDataStream (new token) or the timelocked signalSetDataStream path, never the
+  // generic un-delayed setter — so they are excluded from the generic-config allowlist. (ZEROMARK-684)
+  DATA_STREAM_INVERTED: true,
+  DATA_STREAM_SPREAD_REDUCTION_FACTOR: true,
   PYTH_HERMES_FEED_MULTIPLIER: true,
   DEPOSIT_FEE_TYPE: true,
   DEPOSIT_LIST: true,

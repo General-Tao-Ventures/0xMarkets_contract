@@ -13,7 +13,7 @@ const func = createDeployFunction({
     "SwapUtils",
     "SwapPricingUtils",
     "PositionUtils",
-    // Deposits now settle a pending insurance injection before pricing GM, 
+    // Deposits now settle a pending insurance injection before pricing GM,
     // calling the external InsuranceFundUtils.attemptInjectPool.
     "InsuranceFundUtils",
   ],

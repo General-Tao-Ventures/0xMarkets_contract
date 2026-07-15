@@ -79,6 +79,19 @@ contract Config is ReentrancyGuard, RoleModule, BasicMulticall {
             revert Errors.PriceFeedAlreadyExistsForToken(token);
         }
 
+        // add-only setter (reverts above if a feed exists): a zero feed, zero multiplier (zeroes the
+        // derived price) or zero heartbeat (feed never goes stale) is always a misconfiguration.
+        // stablePrice may legitimately be 0 (no fixed-price override), so it stays unconstrained.
+        if (priceFeed == address(0)) {
+            revert Errors.EmptyChainlinkPriceFeed(token);
+        }
+        if (priceFeedMultiplier == 0) {
+            revert Errors.EmptyChainlinkPriceFeedMultiplier(token);
+        }
+        if (priceFeedHeartbeatDuration == 0) {
+            revert Errors.EmptyChainlinkPriceFeedHeartbeat(token);
+        }
+
         dataStore.setAddress(Keys.priceFeedKey(token), priceFeed);
         dataStore.setUint(Keys.priceFeedMultiplierKey(token), priceFeedMultiplier);
         dataStore.setUint(Keys.priceFeedHeartbeatDurationKey(token), priceFeedHeartbeatDuration);
@@ -142,11 +155,13 @@ contract Config is ReentrancyGuard, RoleModule, BasicMulticall {
         uint256 pythLazerFeedMultiplier,
         uint256 pythLazerFeedSpreadFactor
     ) external onlyConfigKeeper nonReentrant {
-        if (dataStore.getBytes32(Keys.dataStreamIdKey(token)) != bytes32(0)) {
-            revert Errors.DataStreamIdAlreadyExistsForToken(token);
-        }
         if (dataStore.getUint(Keys.pythLazerFeedIdKey(token)) != 0) {
             revert Errors.PythLazerFeedIdAlreadyExistsForToken(token);
+        }
+
+        // pyth-lazer feed ids are uint32 on the wire; 0 or > uint32 max can never match a real feed
+        if (pythLazerFeedId == 0 || pythLazerFeedId > type(uint32).max) {
+            revert Errors.InvalidPythLazerFeedId(token, pythLazerFeedId);
         }
 
         ConfigValidatorUtils.validateRange(
@@ -310,6 +325,10 @@ contract Config is ReentrancyGuard, RoleModule, BasicMulticall {
         uint256 marketMinLev = MarketUtils.getMinLeverage(dataStore, market);
 
         for (uint256 i = 0; i < n; i++) {
+            // a zero max-leverage tier is un-openable (and divides by zero downstream)
+            if (maxLeverages[i] == 0) {
+                revert Errors.LeverageLadderMisconfigured();
+            }
             // strictly ascending notionals
             if (i > 0 && maxNotionals[i] <= maxNotionals[i - 1]) {
                 revert Errors.LeverageLadderMisconfigured();

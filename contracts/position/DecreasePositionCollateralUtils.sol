@@ -356,30 +356,18 @@ library DecreasePositionCollateralUtils {
                 );
             }
         } else {
-            if (collateralCache.result.amountPaidInCollateralToken > 0) {
-                MarketUtils.applyDeltaToPoolAmount(
-                    params.contracts.dataStore,
-                    params.contracts.eventEmitter,
-                    params.market,
-                    params.position.collateralToken(),
-                    collateralCache.result.amountPaidInCollateralToken.toInt256()
-                );
-            }
-
-            if (collateralCache.result.amountPaidInSecondaryOutputToken > 0) {
-                MarketUtils.applyDeltaToPoolAmount(
-                    params.contracts.dataStore,
-                    params.contracts.eventEmitter,
-                    params.market,
-                    values.output.secondaryOutputToken,
-                    collateralCache.result.amountPaidInSecondaryOutputToken.toInt256()
-                );
-            }
-
-            // empty the fees since the amount was entirely paid to the pool instead of for fees
-            // it is possible for the txn execution to still complete even in this case
-            // as long as the remainingCostUsd is still zero
-            fees = getEmptyFees(fees);
+            // Fully paid, but part (or all) of the fee came from the secondary output token. Distribute
+            // the configured fee shares across BOTH payment tokens, in proportion to how much of the fee
+            // each token covered — instead of crediting the whole amount to the pool and zeroing the fees,
+            // which silently bypassed the configured receivers (veAlpha / treasury / buyback / validator /
+            // insurance / UI / affiliate). Mirrors _distributeInsolventShares, applied per payment token.
+            _distributeSecondaryPaidShares(
+                params,
+                fees,
+                collateralCache.result.amountPaidInCollateralToken,
+                collateralCache.result.amountPaidInSecondaryOutputToken,
+                values.output.secondaryOutputToken
+            );
         }
 
         if (collateralCache.result.remainingCostUsd > 0) {
@@ -884,26 +872,105 @@ library DecreasePositionCollateralUtils {
         // writes 0 to the affiliate). Pay it inside this function instead.
         fees.referral.affiliateRewardAmount = Precision.applyFactor(fees.referral.affiliateRewardAmount, scale);
 
-        address collateralToken = params.position.collateralToken();
+        _payFeeShares(params, fees, params.position.collateralToken());
+    }
 
+    // @dev Fully-paid decrease where part (or all) of the fee was paid from the secondary output
+    // token. Distribute the configured fee shares across BOTH payment tokens in proportion to how much
+    // of the total fee each token covered, so the fee split no longer depends on which token paid.
+    // `fees` is restored to its original amounts on return so the downstream PositionFeesInfo emit still
+    // reports the full fee.
+    function _distributeSecondaryPaidShares(
+        PositionUtils.UpdatePositionParams memory params,
+        PositionPricingUtils.PositionFees memory fees,
+        uint256 amountPaidInCollateralToken,
+        uint256 amountPaidInSecondaryOutputToken,
+        address secondaryOutputToken
+    ) internal {
+        uint256 totalCost = fees.totalCostAmountExcludingFunding;
+        // This branch is only reached when the secondary token paid part of a fully-covered fee, so a fee
+        // was owed (totalCost > 0). Guard defensively anyway.
+        if (totalCost == 0) {
+            return;
+        }
+
+        // Snapshot originals; the struct is scaled per payment token below, then restored (scale = 1.0).
+        DecreasePositionCollateralUtilsCache.OriginalFees memory orig = DecreasePositionCollateralUtilsCache.OriginalFees(
+            fees.feeAmountForPool,
+            fees.veAlphaFeeAmount,
+            fees.treasuryFeeAmount,
+            fees.buybackFeeAmount,
+            fees.validatorFeeAmount,
+            fees.insuranceFeeAmount,
+            fees.ui.uiFeeAmount,
+            fees.referral.affiliateRewardAmount
+        );
+
+        address[2] memory tokens = [params.position.collateralToken(), secondaryOutputToken];
+        uint256[2] memory amounts = [amountPaidInCollateralToken, amountPaidInSecondaryOutputToken];
+
+        for (uint256 i; i < 2; i++) {
+            if (amounts[i] == 0) {
+                continue;
+            }
+            // Collateral (i==0): a true fraction, capped at 1.0. Secondary (i==1): also converts the
+            // collateral-denominated buckets into secondary-token units, so it is not capped.
+            uint256 scale = Precision.toFactor(amounts[i], totalCost);
+            if (i == 0 && scale > Precision.FLOAT_PRECISION) {
+                scale = Precision.FLOAT_PRECISION;
+            }
+            _scaleFees(fees, orig, scale);
+            _payFeeShares(params, fees, tokens[i]);
+        }
+
+        // Restore originals (scale by 1.0) so the downstream fee event reports the full fee.
+        _scaleFees(fees, orig, Precision.FLOAT_PRECISION);
+
+        // The affiliate reward was already paid inline above (across both payment tokens). Unlike the
+        // other buckets, the affiliate is otherwise paid downstream by PositionUtils.handleReferral,
+        // which runs after this branch (this branch does not early-return). Zero it here so the
+        // affiliate is not credited a second time.
+        fees.referral.affiliateRewardAmount = 0;
+    }
+
+    function _scaleFees(
+        PositionPricingUtils.PositionFees memory fees,
+        DecreasePositionCollateralUtilsCache.OriginalFees memory orig,
+        uint256 scale
+    ) private pure {
+        fees.feeAmountForPool = Precision.applyFactor(orig.feeAmountForPool, scale);
+        fees.veAlphaFeeAmount = Precision.applyFactor(orig.veAlphaFeeAmount, scale);
+        fees.treasuryFeeAmount = Precision.applyFactor(orig.treasuryFeeAmount, scale);
+        fees.buybackFeeAmount = Precision.applyFactor(orig.buybackFeeAmount, scale);
+        fees.validatorFeeAmount = Precision.applyFactor(orig.validatorFeeAmount, scale);
+        fees.insuranceFeeAmount = Precision.applyFactor(orig.insuranceFeeAmount, scale);
+        fees.ui.uiFeeAmount = Precision.applyFactor(orig.uiFeeAmount, scale);
+        fees.referral.affiliateRewardAmount = Precision.applyFactor(orig.affiliateRewardAmount, scale);
+    }
+
+    function _payFeeShares(
+        PositionUtils.UpdatePositionParams memory params,
+        PositionPricingUtils.PositionFees memory fees,
+        address token
+    ) internal {
         if (fees.feeAmountForPool > 0) {
             MarketUtils.applyDeltaToPoolAmount(
                 params.contracts.dataStore,
                 params.contracts.eventEmitter,
                 params.market,
-                collateralToken,
+                token,
                 fees.feeAmountForPool.toInt256()
             );
         }
-        _distributeTransactionShares(params, fees, collateralToken);
-        _distributeLiquidationShares(params, fees, collateralToken);
+        _distributeTransactionShares(params, fees, token);
+        _distributeLiquidationShares(params, fees, token);
         if (fees.ui.uiFeeAmount > 0) {
             FeeUtils.incrementClaimableUiFeeAmount(
                 params.contracts.dataStore,
                 params.contracts.eventEmitter,
                 params.order.uiFeeReceiver(),
                 params.market.marketToken,
-                collateralToken,
+                token,
                 fees.ui.uiFeeAmount,
                 Keys.UI_POSITION_FEE_TYPE
             );
@@ -913,10 +980,23 @@ library DecreasePositionCollateralUtils {
                 params.contracts.dataStore,
                 params.contracts.eventEmitter,
                 params.market.marketToken,
-                collateralToken,
+                token,
                 fees.referral.affiliate,
                 fees.referral.affiliateRewardAmount
             );
         }
+    }
+}
+
+library DecreasePositionCollateralUtilsCache {
+    struct OriginalFees {
+        uint256 feeAmountForPool;
+        uint256 veAlphaFeeAmount;
+        uint256 treasuryFeeAmount;
+        uint256 buybackFeeAmount;
+        uint256 validatorFeeAmount;
+        uint256 insuranceFeeAmount;
+        uint256 uiFeeAmount;
+        uint256 affiliateRewardAmount;
     }
 }
