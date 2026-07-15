@@ -273,6 +273,16 @@ library OrderStoreUtils {
             revert Errors.OrderNotFound(key);
         }
 
+        // keep the per-market order count in step with removals. saturating: orders created before
+        // the cap existed were never counted, so guard against underflow on their removal.
+        bytes32 orderCountKey = Keys.accountOrderCountForMarketKey(
+            account,
+            dataStore.getAddress(keccak256(abi.encode(key, MARKET)))
+        );
+        if (dataStore.getUint(orderCountKey) > 0) {
+            dataStore.decrementUint(orderCountKey, 1);
+        }
+
         dataStore.removeBytes32(
             Keys.ORDER_LIST,
             key

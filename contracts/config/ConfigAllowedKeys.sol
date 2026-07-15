@@ -156,6 +156,7 @@ library ConfigAllowedKeys {
 
         allowedBaseKeys[Keys.MAX_UI_FEE_FACTOR] = true;
         allowedBaseKeys[Keys.MAX_AUTO_CANCEL_ORDERS] = true;
+        allowedBaseKeys[Keys.MAX_ACCOUNT_ORDER_COUNT_FOR_MARKET] = true;
         allowedBaseKeys[Keys.MAX_TOTAL_CALLBACK_GAS_LIMIT_FOR_AUTO_CANCEL_ORDERS] = true;
 
         allowedBaseKeys[Keys.ORACLE_TYPE] = true;

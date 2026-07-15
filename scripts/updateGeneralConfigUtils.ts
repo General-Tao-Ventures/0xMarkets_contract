@@ -41,6 +41,14 @@ const processGeneralConfig = async ({ generalConfig, oracleConfig, handleConfig 
 
   await handleConfig(
     "uint",
+    keys.MAX_ACCOUNT_ORDER_COUNT_FOR_MARKET,
+    "0x",
+    generalConfig.maxAccountOrderCountForMarket,
+    `maxAccountOrderCountForMarket`
+  );
+
+  await handleConfig(
+    "uint",
     keys.MAX_TOTAL_CALLBACK_GAS_LIMIT_FOR_AUTO_CANCEL_ORDERS,
     "0x",
     generalConfig.maxTotalCallbackGasLimitForAutoCancelOrders,
