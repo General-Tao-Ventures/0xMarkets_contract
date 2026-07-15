@@ -15,15 +15,12 @@ const requiredRolesForContracts = {
   CONTROLLER: [
     "Config",
     "MarketFactory",
-    "GlvFactory",
     "Timelock",
     "OracleStore",
     "Oracle",
     "ConfigSyncer",
 
     "ExchangeRouter",
-    "SubaccountRouter",
-    "GlvRouter",
 
     "OrderHandler",
     "DepositHandler",
@@ -31,14 +28,11 @@ const requiredRolesForContracts = {
     "AdlHandler",
     "LiquidationHandler",
     "ShiftHandler",
-    "GlvHandler",
     "FeeHandler",
     "SwapHandler",
   ],
   ROUTER_PLUGIN: [
     "ExchangeRouter",
-    "SubaccountRouter",
-    "GlvRouter",
   ],
   ROLE_ADMIN: ["Timelock"],
   CONFIG_KEEPER: ["ConfigSyncer"],
