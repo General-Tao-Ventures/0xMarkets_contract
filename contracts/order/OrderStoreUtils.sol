@@ -142,6 +142,16 @@ library OrderStoreUtils {
     }
 
     function set(DataStore dataStore, bytes32 key, Order.Props memory order) external {
+        // a genuinely new order (not a freeze/update re-store of an existing key) bumps the
+        // per-market count. this covers user orders and protocol-created liquidation/ADL orders
+        // alike, so the count stays in step with the decrement in remove().
+        if (!dataStore.containsBytes32(Keys.ORDER_LIST, key)) {
+            dataStore.incrementUint(
+                Keys.accountOrderCountForMarketKey(order.account(), order.market()),
+                1
+            );
+        }
+
         dataStore.addBytes32(
             Keys.ORDER_LIST,
             key
