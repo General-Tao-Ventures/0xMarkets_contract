@@ -17,6 +17,7 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
       sequencerGraceDuration: 300,
       maxUiFeeFactor: decimalToFloat(5, 5), // 0.005%
       maxAutoCancelOrders: 6,
+      maxAccountOrderCountForMarket: 30,
       maxTotalCallbackGasLimitForAutoCancelOrders: 3_000_000,
       minHandleExecutionErrorGas: 1_200_000,
       minHandleExecutionErrorGasToForward: 1_000_000,
@@ -87,6 +88,7 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
     sequencerGraceDuration: 300,
     maxUiFeeFactor: percentageToFloat("0.05%"),
     maxAutoCancelOrders: 6,
+    maxAccountOrderCountForMarket: 30,
     maxTotalCallbackGasLimitForAutoCancelOrders: 5_000_000,
     minHandleExecutionErrorGas: 1_200_000,
     minHandleExecutionErrorGasToForward: 1_000_000, // measured gas required for an order cancellation: ~600,000
