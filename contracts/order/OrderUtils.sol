@@ -218,7 +218,6 @@ library OrderUtils {
 
         BaseOrderUtils.validateNonEmptyOrder(order);
         OrderStoreUtils.set(dataStore, key, order);
-        dataStore.incrementUint(Keys.accountOrderCountForMarketKey(account, order.market()), 1);
 
         updateAutoCancelList(dataStore, key, order, order.autoCancel());
         validateTotalCallbackGasLimitForAutoCancelOrders(dataStore, order);
