@@ -23,4 +23,7 @@ const func = createDeployFunction({
   },
 });
 
+// subaccounts are unused; deploy only on the in-memory test network, never on a persistent chain
+func.skip = async ({ network }: any) => network.name !== "hardhat";
+
 export default func;

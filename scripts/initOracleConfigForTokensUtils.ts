@@ -142,7 +142,10 @@ export async function initOracleConfigForTokens({ write }) {
     }
 
     if (onchainConfig.pythLazerFeedId === 0 && token.pythLazerFeedId !== 0) {
-      const pythLazerFeedMultiplier = expandDecimals(1, 60 - token.decimals - token.pythLazerFeedDecimals);
+      // inverted feeds need the token-decimal term flipped, else the inverted price is 10^(2*decimals) too high
+      const pythLazerFeedMultiplier = token.pythLazerFeedInverted
+        ? expandDecimals(1, 60 + token.decimals - token.pythLazerFeedDecimals)
+        : expandDecimals(1, 60 - token.decimals - token.pythLazerFeedDecimals);
       const pythLazerFeedSpreadFactor = token.pythLazerFeedSpreadFactor ?? expandDecimals(1, 30);
 
       console.log(

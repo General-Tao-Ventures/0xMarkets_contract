@@ -123,6 +123,8 @@ const config: {
       decimals: 6,
       pythLazerFeedId: 340,
       pythLazerFeedDecimals: 3,
+      // feed 340 is USD/JPY; the JPY index token needs JPY/USD, so invert
+      pythLazerFeedInverted: true,
       isAsset: true,
     },
     WTI: {
@@ -189,6 +191,8 @@ const config: {
       decimals: 6,
       pythLazerFeedId: 340,
       pythLazerFeedDecimals: 3,
+      // feed 340 is USD/JPY; the JPY index token needs JPY/USD, so invert
+      pythLazerFeedInverted: true,
       isAsset: true,
     },
     WTI: {

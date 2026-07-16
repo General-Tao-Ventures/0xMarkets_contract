@@ -4,6 +4,6 @@ const func = createDeployFunction({
   contractName: "GlvShiftStoreUtils",
 });
 
-func.skip = async ({ network }: any) => network.name === "localhost";
+func.skip = async ({ network }: any) => network.name !== "hardhat";
 
 export default func;
