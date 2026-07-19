@@ -260,7 +260,8 @@ library PositionUtils {
         Market.Props memory market,
         MarketUtils.MarketPrices memory prices,
         bool shouldValidateMinPositionSize,
-        bool shouldValidateMinCollateralUsd
+        bool shouldValidateMinCollateralUsd,
+        bool shouldValidateMinLeverage
     ) public view {
         if (position.sizeInUsd() == 0 || position.sizeInTokens() == 0) {
             revert Errors.InvalidPositionSizeValues(position.sizeInUsd(), position.sizeInTokens());
@@ -276,19 +277,24 @@ library PositionUtils {
             }
         }
 
-        // enforce min_leverage lower bound when configured (> 0 is opt-in)
-        uint256 minLeverage = MarketUtils.getMinLeverage(dataStore, market.marketToken);
-        if (minLeverage > 0) {
-            Price.Props memory collateralTokenPrice = MarketUtils.getCachedTokenPrice(
-                position.collateralToken(),
-                market,
-                prices
-            );
-            uint256 collateralUsd = position.collateralAmount() * collateralTokenPrice.min;
-            if (collateralUsd > 0) {
-                uint256 currLeverage = Precision.toFactor(position.sizeInUsd(), collateralUsd);
-                if (currLeverage < minLeverage) {
-                    revert Errors.InvalidLeverage(currLeverage, minLeverage);
+        // enforce min_leverage lower bound when configured (> 0 is opt-in). This is an open-time /
+        // size-increase constraint only: decreases, collateral top-ups and ADL all move a position
+        // toward safety by lowering leverage, so the floor must not fire on them (it would trap
+        // de-risking and block partial ADL). The increase path passes shouldValidateMinLeverage=true.
+        if (shouldValidateMinLeverage) {
+            uint256 minLeverage = MarketUtils.getMinLeverage(dataStore, market.marketToken);
+            if (minLeverage > 0) {
+                Price.Props memory collateralTokenPrice = MarketUtils.getCachedTokenPrice(
+                    position.collateralToken(),
+                    market,
+                    prices
+                );
+                uint256 collateralUsd = position.collateralAmount() * collateralTokenPrice.min;
+                if (collateralUsd > 0) {
+                    uint256 currLeverage = Precision.toFactor(position.sizeInUsd(), collateralUsd);
+                    if (currLeverage < minLeverage) {
+                        revert Errors.InvalidLeverage(currLeverage, minLeverage);
+                    }
                 }
             }
         }

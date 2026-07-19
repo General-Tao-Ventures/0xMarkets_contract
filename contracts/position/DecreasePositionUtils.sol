@@ -322,7 +322,8 @@ library DecreasePositionUtils {
                 params.market,
                 cache.prices,
                 false, // shouldValidateMinPositionSize
-                false // shouldValidateMinCollateralUsd
+                false, // shouldValidateMinCollateralUsd
+                false // shouldValidateMinLeverage — decreases/ADL lower leverage, never gate them
             );
         }
 

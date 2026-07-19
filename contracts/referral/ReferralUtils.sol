@@ -83,13 +83,19 @@ library ReferralUtils {
 
         if (code != bytes32(0)) {
             affiliate = referralStorage.codeOwners(code);
-            uint256 referralTierLevel = referralStorage.referrerTiers(affiliate);
-            (totalRebate, discountShare) = referralStorage.tiers(referralTierLevel);
-            minAffiliateRewardFactor = dataStore.getUint(Keys.minAffiliateRewardFactorKey(referralTierLevel));
+            // an unregistered code resolves to a zero affiliate. Without this guard it would fall
+            // through to tier 0, which is configured with a non-zero rebate, so a random code would
+            // grant the trader a discount and credit the affiliate reward to address(0) where it is
+            // unclaimable. Apply rebates only for a code with a real owner.
+            if (affiliate != address(0)) {
+                uint256 referralTierLevel = referralStorage.referrerTiers(affiliate);
+                (totalRebate, discountShare) = referralStorage.tiers(referralTierLevel);
+                minAffiliateRewardFactor = dataStore.getUint(Keys.minAffiliateRewardFactorKey(referralTierLevel));
 
-            uint256 customDiscountShare = referralStorage.referrerDiscountShares(affiliate);
-            if (customDiscountShare != 0) {
-                discountShare = customDiscountShare;
+                uint256 customDiscountShare = referralStorage.referrerDiscountShares(affiliate);
+                if (customDiscountShare != 0) {
+                    discountShare = customDiscountShare;
+                }
             }
         }
 

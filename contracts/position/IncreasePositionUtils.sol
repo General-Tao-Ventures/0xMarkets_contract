@@ -216,7 +216,10 @@ library IncreasePositionUtils {
             params.market,
             prices,
             true, // shouldValidateMinPositionSize
-            true // shouldValidateMinCollateralUsd
+            true, // shouldValidateMinCollateralUsd
+            // shouldValidateMinLeverage: only when size actually increases. A collateral-only top-up
+            // (sizeDeltaUsd == 0) lowers leverage toward safety and must not trip the floor.
+            params.order.sizeDeltaUsd() > 0
         );
 
         PositionEventUtils.emitPositionFeesCollected(

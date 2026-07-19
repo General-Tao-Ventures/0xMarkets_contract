@@ -222,6 +222,41 @@ describe("Exchange.PositionFees", () => {
     });
   });
 
+  it("ignores an unregistered referral code (no discount, no address(0) reward)", async () => {
+    const unregisteredCode = hashString("never registered by anyone");
+    expect(await referralStorage.codeOwners(unregisteredCode)).eq(ethers.constants.AddressZero);
+
+    await handleOrder(fixture, {
+      create: {
+        account: user0,
+        market: ethUsdMarket,
+        initialCollateralToken: wnt,
+        initialCollateralDeltaAmount: expandDecimals(10, 18),
+        swapPath: [],
+        sizeDeltaUsd: decimalToFloat(200 * 1000),
+        acceptablePrice: expandDecimals(5050, 12),
+        executionFee: expandDecimals(1, 15),
+        minOutputAmount: 0,
+        orderType: OrderType.MarketIncrease,
+        isLong: true,
+        shouldUnwrapNativeToken: false,
+        referralCode: unregisteredCode,
+      },
+      execute: {
+        afterExecution: ({ logs }) => {
+          const event = getEventData(logs, "PositionFeesCollected");
+          // tier 0 carries a non-zero rebate, so before the fix an unregistered code granted a
+          // discount and credited the reward to address(0). Now the whole rebate block is skipped
+          // (totalRebateFactor == 0), so those referral fields are not emitted at all.
+          expect(event["referral.traderDiscountAmount"], "no discount emitted").to.be.undefined;
+          expect(event["referral.affiliateRewardAmount"], "no reward emitted").to.be.undefined;
+          // and the protocol fee keeps the full position fee — nothing leaked to a rebate.
+          expect(event.protocolFeeAmount, "protocol fee = full position fee").eq(event.positionFeeAmount);
+        },
+      },
+    });
+  });
+
   it("pro tier discount", async () => {
     await dataStore.setUint(keys.proTraderTierKey(user0.address), 1);
 
