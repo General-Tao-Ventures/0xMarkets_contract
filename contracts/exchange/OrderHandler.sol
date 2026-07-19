@@ -285,6 +285,10 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
     {
         uint256 startingGas = gasleft();
 
+        // hold off execution until the L2 sequencer grace window has passed, matching liquidations
+        // and withdrawals, so orders cannot execute on prices from right after a sequencer outage
+        oracle.validateSequencerUp();
+
         Order.Props memory order = OrderStoreUtils.get(dataStore, key);
         uint256 estimatedGasLimit = GasUtils.estimateExecuteOrderGasLimit(dataStore, order);
         GasUtils.validateExecutionGas(dataStore, startingGas, estimatedGasLimit);

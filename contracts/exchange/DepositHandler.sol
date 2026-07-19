@@ -95,6 +95,10 @@ contract DepositHandler is IDepositHandler, BaseHandler {
     {
         uint256 startingGas = gasleft();
 
+        // hold off execution until the L2 sequencer grace window has passed, matching liquidations
+        // and withdrawals, so deposits cannot execute on prices from right after a sequencer outage
+        oracle.validateSequencerUp();
+
         Deposit.Props memory deposit = DepositStoreUtils.get(dataStore, key);
         uint256 estimatedGasLimit = GasUtils.estimateExecuteDepositGasLimit(dataStore, deposit);
         GasUtils.validateExecutionGas(dataStore, startingGas, estimatedGasLimit);
