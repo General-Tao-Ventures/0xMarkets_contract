@@ -169,5 +169,81 @@ describe("DynamicMmr", () => {
         },
       });
     });
+
+    it("allows a partial decrease that drops leverage below min_leverage", async () => {
+      await dataStore.setUint(keys.minLeverageKey(ethUsdMarket.marketToken), decimalToFloat(10));
+
+      // open at the 10x floor: 10 WETH ($50k) collateral, $500k size
+      await handleOrder(fixture, {
+        create: {
+          market: ethUsdMarket,
+          initialCollateralToken: wnt,
+          initialCollateralDeltaAmount: expandDecimals(10, 18),
+          sizeDeltaUsd: decimalToFloat(500 * 1000),
+          acceptablePrice: expandDecimals(5001, 12),
+          orderType: OrderType.MarketIncrease,
+          isLong: true,
+        },
+        execute: { tokens: [wnt.address, usdc.address] },
+      });
+
+      const posKey = getPositionKey(user0.address, ethUsdMarket.marketToken, wnt.address, true);
+
+      // decrease $450k → ~$50k size against ~$50k collateral = ~1x, below the 10x floor.
+      // must execute (not cancel with InvalidLeverage) — de-risking is always allowed.
+      await handleOrder(fixture, {
+        create: {
+          market: ethUsdMarket,
+          initialCollateralToken: wnt,
+          initialCollateralDeltaAmount: 0,
+          sizeDeltaUsd: decimalToFloat(450 * 1000),
+          acceptablePrice: expandDecimals(4999, 12),
+          orderType: OrderType.MarketDecrease,
+          isLong: true,
+        },
+        execute: { tokens: [wnt.address, usdc.address] },
+      });
+
+      expect((await reader.getPosition(dataStore.address, posKey)).numbers.sizeInUsd).to.eq(decimalToFloat(50 * 1000));
+    });
+
+    it("allows a collateral-only top-up that drops leverage below min_leverage", async () => {
+      await dataStore.setUint(keys.minLeverageKey(ethUsdMarket.marketToken), decimalToFloat(10));
+
+      await handleOrder(fixture, {
+        create: {
+          market: ethUsdMarket,
+          initialCollateralToken: wnt,
+          initialCollateralDeltaAmount: expandDecimals(10, 18),
+          sizeDeltaUsd: decimalToFloat(500 * 1000),
+          acceptablePrice: expandDecimals(5001, 12),
+          orderType: OrderType.MarketIncrease,
+          isLong: true,
+        },
+        execute: { tokens: [wnt.address, usdc.address] },
+      });
+
+      const posKey = getPositionKey(user0.address, ethUsdMarket.marketToken, wnt.address, true);
+      const collateralBefore = (await reader.getPosition(dataStore.address, posKey)).numbers.collateralAmount;
+
+      // add 10 WETH collateral, no size change → leverage halves to ~5x, below the 10x floor.
+      // must execute — adding collateral strictly reduces risk.
+      await handleOrder(fixture, {
+        create: {
+          market: ethUsdMarket,
+          initialCollateralToken: wnt,
+          initialCollateralDeltaAmount: expandDecimals(10, 18),
+          sizeDeltaUsd: 0,
+          acceptablePrice: expandDecimals(5001, 12),
+          orderType: OrderType.MarketIncrease,
+          isLong: true,
+        },
+        execute: { tokens: [wnt.address, usdc.address] },
+      });
+
+      expect((await reader.getPosition(dataStore.address, posKey)).numbers.collateralAmount).to.eq(
+        collateralBefore.add(expandDecimals(10, 18))
+      );
+    });
   });
 });
