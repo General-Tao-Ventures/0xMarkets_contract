@@ -77,7 +77,11 @@ contract PythLazerFeedProvider is IOracleProvider {
         if (rawPrice <= 0) revert Errors.InvalidFeedPrice(token, int256(rawPrice));
         uint256 price = uint256(uint64(rawPrice));
 
-        uint64 rawConfidence = PythLazerLib.getConfidence(feed);
+        // A legitimately signed update can carry confidence == 0, which the Lazer library parses as
+        // ApplicableButMissing so getConfidence would revert and halt pricing for the whole batch.
+        // Treat a missing confidence as zero spread (band collapses to the mid price, same as a zero
+        // spread factor) rather than reverting.
+        uint64 rawConfidence = PythLazerLib.hasConfidence(feed) ? PythLazerLib.getConfidence(feed) : 0;
         uint256 spreadFactor = dataStore.getUint(Keys.pythLazerFeedSpreadFactorKey(token));
         uint256 scaledConfidence = Precision.applyFactor(uint256(rawConfidence), spreadFactor);
 

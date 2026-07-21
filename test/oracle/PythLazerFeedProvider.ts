@@ -163,6 +163,19 @@ describe("PythLazerFeedProvider", () => {
     expect(max).to.eq(price);
   });
 
+  it("prices a zero-confidence update at the mid price instead of reverting", async () => {
+    // a legitimately signed update can carry confidence == 0; the Lazer library treats that as a
+    // missing property, which used to revert getConfidence and halt the whole price batch. It must
+    // now collapse the band to the mid price rather than revert.
+    await dataStore.setUint(keys.pythLazerFeedSpreadFactorKey(wnt.address), FLOAT_PRECISION);
+
+    const price = 100_000_000;
+    const { min, max } = await getOraclePrice({ price, confidence: 0 });
+
+    expect(min).to.eq(price);
+    expect(max).to.eq(price);
+  });
+
   it("inverted feed round-trips to the correct index price with the inverted multiplier", async () => {
     // JPY-like: 6 token decimals, 3 feed decimals, USD/JPY = 150.000 -> index token needs JPY/USD.
     // Correct inverted multiplier is 10^(60 + tokenDecimals - feedDecimals) = 10^63.
