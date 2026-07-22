@@ -246,7 +246,7 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
                 true, // isExternalCall
                 Keys.USER_INITIATED_CANCEL,
                 "",
-                false // skipCallback
+                false // skipCallback: user cancellations keep their callback
             )
         );
     }
@@ -410,7 +410,7 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
                     true, // isExternalCall
                     reason,
                     reasonBytes,
-                    false // skipCallback
+                    false // skipCallback: normal cancellations keep their callback
                 )
             );
 

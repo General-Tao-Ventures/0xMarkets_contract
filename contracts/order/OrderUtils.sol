@@ -43,6 +43,8 @@ library OrderUtils {
         bool isExternalCall;
         string reason;
         bytes reasonBytes;
+        // when true, cancelOrder skips the trader-selected cancellation callback (used by forced
+        // auto-cancel cleanup so a liquidation cannot run unpaid callback gas on the keeper)
         bool skipCallback;
     }
 
@@ -265,10 +267,9 @@ library OrderUtils {
         }
 
         EventUtils.EventLogData memory eventData;
-        // Skip the order's callback when the cancellation is forced by auto-cancel cleanup on a full
-        // position close. That order is not funded for this call (a zero-fee auto-cancel child pays no
-        // execution fee), so invoking its trader-set callback would let the callback gas be externalized
-        // onto the liquidation/close keeper.
+        // Forced auto-cancel cleanup (skipCallback) must not run the trader's cancellation callback:
+        // auto-cancel children carry executionFee == 0, so during a liquidation-driven clear their
+        // callbacks would dump unpaid gas onto the keeper. User-initiated cancellations still fire it.
         if (!params.skipCallback) {
             CallbackUtils.afterOrderCancellation(params.key, order, eventData);
         }
@@ -359,7 +360,7 @@ library OrderUtils {
                     false, // isExternalCall
                     "AUTO_CANCEL", // reason
                     "", // reasonBytes
-                    true // skipCallback: forced cleanup must not run the order's callback
+                    true // skipCallback: forced cleanup must not run unpaid trader callbacks
                 )
             );
         }
