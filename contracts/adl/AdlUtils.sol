@@ -175,7 +175,7 @@ library AdlUtils {
             0, // triggerPrice
             position.isLong() ? 0 : type(uint256).max, // acceptablePrice
             0, // executionFee
-            params.dataStore.getUint(Keys.MAX_CALLBACK_GAS_LIMIT), // callbackGasLimit
+            0, // callbackGasLimit (no callback on forced ADL orders)
             0, // minOutputAmount
             params.updatedAtTime, // updatedAtTime
             0 // validFromTime

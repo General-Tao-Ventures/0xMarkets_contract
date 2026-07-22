@@ -69,7 +69,7 @@ library LiquidationUtils {
             0, // triggerPrice
             position.isLong() ? 0 : type(uint256).max, // acceptablePrice
             0, // executionFee
-            dataStore.getUint(Keys.MAX_CALLBACK_GAS_LIMIT), // callbackGasLimit
+            0, // callbackGasLimit (no callback on forced liquidations)
             0, // minOutputAmount
             Chain.currentTimestamp(), // updatedAtTime
             0 // validFromTime

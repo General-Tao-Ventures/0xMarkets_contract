@@ -348,6 +348,14 @@ export function executeDepositFeatureDisabledKey(contract) {
   return hashData(["bytes32", "address"], [EXECUTE_DEPOSIT_FEATURE_DISABLED, contract]);
 }
 
+export function executeWithdrawalFeatureDisabledKey(contract) {
+  return hashData(["bytes32", "address"], [EXECUTE_WITHDRAWAL_FEATURE_DISABLED, contract]);
+}
+
+export function executeAtomicWithdrawalFeatureDisabledKey(contract) {
+  return hashData(["bytes32", "address"], [EXECUTE_ATOMIC_WITHDRAWAL_FEATURE_DISABLED, contract]);
+}
+
 export function createOrderFeatureDisabledKey(contract, orderType) {
   return hashData(["bytes32", "address", "uint256"], [CREATE_ORDER_FEATURE_DISABLED, contract, orderType]);
 }

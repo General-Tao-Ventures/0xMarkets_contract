@@ -191,6 +191,59 @@ describe("Exchange.AutoCancelOrder", () => {
     expect(await getOrderKeys(dataStore, 0, 10)).eql([orderKey]);
   });
 
+  it("clears all auto-cancel orders on close even after MAX_AUTO_CANCEL_ORDERS is lowered", async () => {
+    await dataStore.setUint(keys.MAX_AUTO_CANCEL_ORDERS, 3);
+
+    await handleOrder(fixture, {
+      create: {
+        market: ethUsdMarket,
+        initialCollateralToken: wnt,
+        initialCollateralDeltaAmount: expandDecimals(10, 18),
+        sizeDeltaUsd: decimalToFloat(200 * 1000),
+        acceptablePrice: expandDecimals(5001, 12),
+        orderType: OrderType.MarketIncrease,
+        isLong: true,
+      },
+    });
+
+    // attach three auto-cancel orders to the position
+    for (let i = 0; i < 3; i++) {
+      await createOrder(fixture, {
+        market: ethUsdMarket,
+        initialCollateralToken: wnt,
+        initialCollateralDeltaAmount: 0,
+        sizeDeltaUsd: decimalToFloat(200 * 1000),
+        acceptablePrice: expandDecimals(4800, 12),
+        orderType: OrderType.StopLossDecrease,
+        isLong: true,
+        autoCancel: true,
+      });
+    }
+
+    expect(await getOrderCount(dataStore)).eq(3);
+
+    // lower the cap below the number of already-attached orders
+    await dataStore.setUint(keys.MAX_AUTO_CANCEL_ORDERS, 1);
+
+    // fully close the position
+    await handleOrder(fixture, {
+      create: {
+        market: ethUsdMarket,
+        initialCollateralToken: wnt,
+        initialCollateralDeltaAmount: 0,
+        sizeDeltaUsd: decimalToFloat(200 * 1000),
+        acceptablePrice: expandDecimals(4800, 12),
+        orderType: OrderType.MarketDecrease,
+        isLong: true,
+      },
+    });
+
+    // every auto-cancel order is cleared, none survive the lowered cap to hit a reopened position
+    expect(await getAccountPositionCount(dataStore, user0.address)).eq(0);
+    expect(await getOrderCount(dataStore)).eq(0);
+    expect(await getAccountOrderCount(dataStore, user0.address)).eq(0);
+  });
+
   it("auto-cancel cleanup on close does not run the trader's callback (gas grief fix)", async () => {
     const mockCallbackReceiver = await deployContract("MockCallbackReceiver", []);
 
