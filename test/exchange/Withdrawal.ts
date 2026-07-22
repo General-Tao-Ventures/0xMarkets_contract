@@ -587,4 +587,33 @@ describe("Exchange.Withdrawal", () => {
 
     expect(await getWithdrawalCount(dataStore)).eq(0);
   });
+
+  it("executeAtomicWithdrawal is not blocked by the normal withdrawal feature flag", async () => {
+    await handleDeposit(fixture, {
+      create: {
+        market: ethUsdMarket,
+        longTokenAmount: expandDecimals(10, 18),
+        shortTokenAmount: expandDecimals(10 * 5000, 6),
+      },
+    });
+
+    // disable normal async withdrawals but keep atomic withdrawals enabled
+    await dataStore.setBool(keys.executeWithdrawalFeatureDisabledKey(withdrawalHandler.address), true);
+    await dataStore.setBool(keys.executeAtomicWithdrawalFeatureDisabledKey(withdrawalHandler.address), false);
+
+    await executeAtomicWithdrawal(fixture, {
+      receiver: user0,
+      market: ethUsdMarket,
+      marketTokenAmount: expandDecimals(1000, 18),
+      minLongTokenAmount: 100,
+      minShortTokenAmount: 50,
+      shouldUnwrapNativeToken: false,
+      gasUsageLabel: "executeAtomicWithdrawal",
+    });
+
+    // the atomic exit succeeded despite normal withdrawals being disabled
+    expect(await getBalanceOf(ethUsdMarket.marketToken, user0.address)).eq("99000000000000000000000"); // 99000
+    expect(await wnt.balanceOf(user0.address)).eq("100000000000000000"); // 0.1 ETH
+    expect(await usdc.balanceOf(user0.address)).eq("500000000"); // 500 USDC
+  });
 });

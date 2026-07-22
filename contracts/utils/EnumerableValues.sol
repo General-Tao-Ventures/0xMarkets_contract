@@ -25,7 +25,9 @@ library EnumerableValues {
      */
     function valuesAt(EnumerableSet.Bytes32Set storage set, uint256 start, uint256 end) internal view returns (bytes32[] memory) {
         uint256 max = set.length();
+        if (start >= max) { return new bytes32[](0); }
         if (end > max) { end = max; }
+        if (end <= start) { return new bytes32[](0); }
 
         bytes32[] memory items = new bytes32[](end - start);
         for (uint256 i = start; i < end; i++) {
@@ -47,7 +49,9 @@ library EnumerableValues {
      */
     function valuesAt(EnumerableSet.AddressSet storage set, uint256 start, uint256 end) internal view returns (address[] memory) {
         uint256 max = set.length();
+        if (start >= max) { return new address[](0); }
         if (end > max) { end = max; }
+        if (end <= start) { return new address[](0); }
 
         address[] memory items = new address[](end - start);
         for (uint256 i = start; i < end; i++) {

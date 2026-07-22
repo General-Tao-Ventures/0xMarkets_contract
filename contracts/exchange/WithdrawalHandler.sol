@@ -207,7 +207,13 @@ contract WithdrawalHandler is IWithdrawalHandler, BaseHandler {
     ) external onlySelf {
         uint256 startingGas = gasleft();
 
-        FeatureUtils.validateFeature(dataStore, Keys.executeWithdrawalFeatureDisabledKey(address(this)));
+        // Gate each mode on its own feature flag so disabling normal withdrawals does not also block
+        // the atomic exit path (and vice versa); the atomic entrypoint already validated its flag.
+        if (swapPricingType == ISwapPricingUtils.SwapPricingType.AtomicWithdrawal) {
+            FeatureUtils.validateFeature(dataStore, Keys.executeAtomicWithdrawalFeatureDisabledKey(address(this)));
+        } else {
+            FeatureUtils.validateFeature(dataStore, Keys.executeWithdrawalFeatureDisabledKey(address(this)));
+        }
 
         ExecuteWithdrawalUtils.ExecuteWithdrawalParams memory params = ExecuteWithdrawalUtils.ExecuteWithdrawalParams(
             dataStore,
