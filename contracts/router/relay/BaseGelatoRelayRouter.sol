@@ -317,6 +317,10 @@ abstract contract BaseGelatoRelayRouter is GelatoRelayContext, ReentrancyGuard, 
 
         uint256 outputAmount;
         if (relayParams.externalCalls.externalCallTargets.length > 0) {
+            // Attribute only the WNT produced by this caller's external calls, measured as the balance
+            // delta across the calls. Reading the full post-call balance would hand any WNT already
+            // stranded on the router (from a stray transfer or prior residue) to whoever calls next.
+            uint256 feeTokenBalanceBefore = ERC20(_getFeeToken()).balanceOf(address(this));
             _sendTokens(account, relayParams.fee.feeToken, address(externalHandler), relayParams.fee.feeAmount);
             externalHandler.makeExternalCalls(
                 relayParams.externalCalls.externalCallTargets,
@@ -324,7 +328,7 @@ abstract contract BaseGelatoRelayRouter is GelatoRelayContext, ReentrancyGuard, 
                 relayParams.externalCalls.refundTokens,
                 relayParams.externalCalls.refundReceivers
             );
-            outputAmount = ERC20(_getFeeToken()).balanceOf(address(this));
+            outputAmount = ERC20(_getFeeToken()).balanceOf(address(this)) - feeTokenBalanceBefore;
         } else if (relayParams.fee.feeSwapPath.length != 0) {
             _sendTokens(account, relayParams.fee.feeToken, address(contracts.orderVault), relayParams.fee.feeAmount);
             outputAmount = _swapFeeTokens(contracts, wnt, relayParams.fee);

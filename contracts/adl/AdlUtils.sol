@@ -142,7 +142,10 @@ library AdlUtils {
             params.account, // account
             params.account, // receiver
             params.account, // cancellationReceiver
-            CallbackUtils.getSavedCallbackContract(params.dataStore, params.account, params.market), // callbackContract
+            // no callback on forced ADL orders: the account does not fund this order (executionFee is
+            // zero), so inheriting the saved callback with MAX_CALLBACK_GAS_LIMIT would let a trader
+            // externalize that much unpaid callback gas onto the ADL keeper
+            address(0), // callbackContract
             address(0), // uiFeeReceiver
             params.market, // market
             position.collateralToken(), // initialCollateralToken
@@ -173,7 +176,7 @@ library AdlUtils {
             0, // triggerPrice
             position.isLong() ? 0 : type(uint256).max, // acceptablePrice
             0, // executionFee
-            params.dataStore.getUint(Keys.MAX_CALLBACK_GAS_LIMIT), // callbackGasLimit
+            0, // callbackGasLimit (no callback on forced ADL orders)
             0, // minOutputAmount
             params.updatedAtTime, // updatedAtTime
             0 // validFromTime

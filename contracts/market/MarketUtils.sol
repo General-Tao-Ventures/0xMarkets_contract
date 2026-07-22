@@ -2418,18 +2418,22 @@ library MarketUtils {
         // then the borrowing fee would be charged for both sides, this should be very rare
         bool skipBorrowingFeeForSmallerSide = dataStore.getBool(Keys.SKIP_BORROWING_FEE_FOR_SMALLER_SIDE);
         if (skipBorrowingFeeForSmallerSide) {
-            uint256 longOpenInterest = getOpenInterest(dataStore, market, true);
-            uint256 shortOpenInterest = getOpenInterest(dataStore, market, false);
+            // Compare the same live reserved USD that the borrowing fee is sized on, not the stored USD
+            // open interest. The long side's reserved USD scales with the index price, so after a price
+            // move the long side can be the smaller side by stored notional yet the larger reserve
+            // consumer; comparing reserved USD keeps the exemption on the side actually reserving less.
+            uint256 longReservedUsd = getReservedUsd(dataStore, market, prices, true);
+            uint256 shortReservedUsd = getReservedUsd(dataStore, market, prices, false);
 
-            // if getting the borrowing factor for longs and if the longOpenInterest
-            // is smaller than the shortOpenInterest, then return zero
-            if (isLong && longOpenInterest < shortOpenInterest) {
+            // if getting the borrowing factor for longs and if the long reserved USD
+            // is smaller than the short reserved USD, then return zero
+            if (isLong && longReservedUsd < shortReservedUsd) {
                 return 0;
             }
 
-            // if getting the borrowing factor for shorts and if the shortOpenInterest
-            // is smaller than the longOpenInterest, then return zero
-            if (!isLong && shortOpenInterest < longOpenInterest) {
+            // if getting the borrowing factor for shorts and if the short reserved USD
+            // is smaller than the long reserved USD, then return zero
+            if (!isLong && shortReservedUsd < longReservedUsd) {
                 return 0;
             }
         }

@@ -35,7 +35,10 @@ library LiquidationUtils {
             account, // account
             account, // receiver
             account, // cancellationReceiver
-            CallbackUtils.getSavedCallbackContract(dataStore, account, market), // callbackContract
+            // no callback on forced liquidations: the account does not fund this order (executionFee is
+            // zero), so inheriting the account's saved callback with MAX_CALLBACK_GAS_LIMIT would let a
+            // trader externalize up to that much unpaid callback gas onto the liquidation keeper
+            address(0), // callbackContract
             address(0), // uiFeeReceiver
             market, // market
             position.collateralToken(), // initialCollateralToken
@@ -67,7 +70,7 @@ library LiquidationUtils {
             0, // triggerPrice
             position.isLong() ? 0 : type(uint256).max, // acceptablePrice
             0, // executionFee
-            dataStore.getUint(Keys.MAX_CALLBACK_GAS_LIMIT), // callbackGasLimit
+            0, // callbackGasLimit (no callback on forced liquidations)
             0, // minOutputAmount
             Chain.currentTimestamp(), // updatedAtTime
             0 // validFromTime
