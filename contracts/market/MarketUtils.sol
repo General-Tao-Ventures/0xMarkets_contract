@@ -1304,11 +1304,19 @@ library MarketUtils {
             configCache.maxFundingFactorPerSecond
         );
 
-        cache.nextSavedFundingFactorPerSecondWithMinBound = Calc.boundMagnitude(
-            cache.nextSavedFundingFactorPerSecond,
-            configCache.minFundingFactorPerSecond,
-            configCache.maxFundingFactorPerSecond
-        );
+        // A zero next funding rate means there is no funding direction (e.g. long and short open
+        // interest are balanced with no saved rate). boundMagnitude signs zero as positive and would
+        // lift it to +minFundingFactorPerSecond, charging longs on a perfectly hedged market. Keep a
+        // zero rate at zero; the min floor should only apply to a rate that already has a direction.
+        if (cache.nextSavedFundingFactorPerSecond == 0) {
+            cache.nextSavedFundingFactorPerSecondWithMinBound = 0;
+        } else {
+            cache.nextSavedFundingFactorPerSecondWithMinBound = Calc.boundMagnitude(
+                cache.nextSavedFundingFactorPerSecond,
+                configCache.minFundingFactorPerSecond,
+                configCache.maxFundingFactorPerSecond
+            );
+        }
 
         return (
             cache.nextSavedFundingFactorPerSecondWithMinBound.abs(),

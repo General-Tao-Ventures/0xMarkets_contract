@@ -362,4 +362,53 @@ describe("Exchange.FundingFees.AdaptiveFunding", () => {
       }
     );
   });
+
+  it("charges no funding on a balanced market with a min funding factor", async () => {
+    // adaptive funding on, with a positive minimum funding floor
+    await dataStore.setUint(keys.fundingFactorKey(ethUsdMarket.marketToken), decimalToFloat(1, 10));
+    await dataStore.setUint(keys.fundingExponentFactorKey(ethUsdMarket.marketToken), decimalToFloat(1));
+    await dataStore.setUint(keys.fundingIncreaseFactorPerSecondKey(ethUsdMarket.marketToken), decimalToFloat(1, 6));
+    await dataStore.setUint(keys.minFundingFactorPerSecondKey(ethUsdMarket.marketToken), decimalToFloat(1, 8));
+    await dataStore.setUint(keys.maxFundingFactorPerSecondKey(ethUsdMarket.marketToken), decimalToFloat(1));
+
+    // equal long and short open interest -> diffUsd == 0, no saved funding rate
+    await handleOrder(fixture, {
+      create: {
+        account: user0,
+        market: ethUsdMarket,
+        initialCollateralToken: wnt,
+        initialCollateralDeltaAmount: expandDecimals(10, 18),
+        swapPath: [],
+        sizeDeltaUsd: decimalToFloat(100_000),
+        acceptablePrice: expandDecimals(5050, 12),
+        orderType: OrderType.MarketIncrease,
+        isLong: true,
+      },
+    });
+
+    await handleOrder(fixture, {
+      create: {
+        account: user1,
+        market: ethUsdMarket,
+        initialCollateralToken: usdc,
+        initialCollateralDeltaAmount: expandDecimals(10_000, 6),
+        sizeDeltaUsd: decimalToFloat(100_000),
+        acceptablePrice: expandDecimals(4950, 12),
+        orderType: OrderType.MarketIncrease,
+        isLong: false,
+      },
+    });
+
+    await time.increase(10 * 60);
+
+    // a perfectly hedged market must not charge either side the minimum floor
+    await usingResult(
+      reader.getMarketInfo(dataStore.address, prices.ethUsdMarket, ethUsdMarket.marketToken),
+      (marketInfo) => {
+        expect(marketInfo.nextFunding.fundingFactorPerSecond).eq(0);
+        expect(marketInfo.nextFunding.nextSavedFundingFactorPerSecond).eq(0);
+        expect(marketInfo.nextFunding.longsPayShorts).eq(false);
+      }
+    );
+  });
 });
