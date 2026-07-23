@@ -83,9 +83,10 @@ describe("Exchange.FundingFees.SingleTokenMarket", () => {
       false
     );
 
-    // 1x amount = rate (0.01%/day × 14d = 0.14%) × short-OI basis ($100k) = $140. Pre-fix the
-    // undivided baseline term charged 2x ($280); reverting the `/ divisor` fails this assertion.
-    expect(baselineInfo.fees.funding.fundingFeeAmount).eq("140000000");
+    // the baseline is charged to the payer (longs) sized on the payer's own OI:
+    // rate (0.01%/day × 14d = 0.14%) × long-OI (payer) basis ($200k) = $280.
+    // pre-fix it was sized on the receiver's $100k short-OI, which gave $140.
+    expect(baselineInfo.fees.funding.fundingFeeAmount).eq("280000000");
   });
 
   it("funding fees, single token market", async () => {
