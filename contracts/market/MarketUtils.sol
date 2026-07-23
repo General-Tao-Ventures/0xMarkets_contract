@@ -1075,8 +1075,11 @@ library MarketUtils {
             // divisor). In single-token markets (longToken == shortToken) divisor == 2 and the
             // per-size split applies funding to both sides, so an undivided baseline-swap term is
             // charged at 2x the configured rate.
+            // size the baseline swap on the side that pays it (its own open interest), so the
+            // charge is swapPerDay of the payer's notional. sizing it on the receiving side would
+            // scale the payer's effective rate by receiverOI/payerOI and overcharge a thin payer side.
             uint256 baselineSwapUsd = Precision.applyFactor(
-                swapLongsPayShorts ? cache.shortOpenInterest : cache.longOpenInterest,
+                swapLongsPayShorts ? cache.longOpenInterest : cache.shortOpenInterest,
                 cache.durationInSeconds * swapPerSecond
             ) / divisor;
 
