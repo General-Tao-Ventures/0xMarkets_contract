@@ -176,6 +176,7 @@ library ConfigAllowedKeys {
         allowedBaseKeys[Keys.THRESHOLD_FOR_DECREASE_FUNDING] = true;
 
         allowedBaseKeys[Keys.IGNORE_OPEN_INTEREST_FOR_USAGE_FACTOR] = true;
+        allowedBaseKeys[Keys.CLAIMABLE_COLLATERAL_DELAY] = true;
 
         allowedBaseKeys[Keys.OPTIMAL_USAGE_FACTOR] = true;
         allowedBaseKeys[Keys.BASE_BORROWING_FACTOR] = true;

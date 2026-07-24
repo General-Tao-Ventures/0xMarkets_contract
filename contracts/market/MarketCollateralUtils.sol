@@ -56,19 +56,7 @@ library MarketCollateralUtils {
     ) internal returns (uint256) {
         uint256 claimableAmount = dataStore.getUint(Keys.claimableCollateralAmountKey(market, token, timeKey, account));
 
-        uint256 claimableFactor;
-
-        {
-            uint256 claimableFactorForTime = dataStore.getUint(
-                Keys.claimableCollateralFactorKey(market, token, timeKey)
-            );
-            uint256 claimableFactorForAccount = dataStore.getUint(
-                Keys.claimableCollateralFactorKey(market, token, timeKey, account)
-            );
-            claimableFactor = claimableFactorForTime > claimableFactorForAccount
-                ? claimableFactorForTime
-                : claimableFactorForAccount;
-        }
+        uint256 claimableFactor = MarketUtils.getClaimableCollateralFactor(dataStore, market, token, timeKey, account);
 
         if (claimableFactor > Precision.FLOAT_PRECISION) {
             revert Errors.InvalidClaimableFactor(claimableFactor);
