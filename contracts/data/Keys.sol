@@ -441,6 +441,8 @@ library Keys {
     bytes32 public constant CLAIMABLE_COLLATERAL_FACTOR = keccak256(abi.encode("CLAIMABLE_COLLATERAL_FACTOR"));
     // @dev key for claimable collateral time divisor
     bytes32 public constant CLAIMABLE_COLLATERAL_TIME_DIVISOR = keccak256(abi.encode("CLAIMABLE_COLLATERAL_TIME_DIVISOR"));
+    // @dev key for the delay after which unclaimed collateral auto-releases in full if no factor was set
+    bytes32 public constant CLAIMABLE_COLLATERAL_DELAY = keccak256(abi.encode("CLAIMABLE_COLLATERAL_DELAY"));
     // @dev key for claimed collateral amount
     bytes32 public constant CLAIMED_COLLATERAL_AMOUNT = keccak256(abi.encode("CLAIMED_COLLATERAL_AMOUNT"));
     bytes32 public constant IGNORE_OPEN_INTEREST_FOR_USAGE_FACTOR = keccak256(abi.encode("IGNORE_OPEN_INTEREST_FOR_USAGE_FACTOR"));

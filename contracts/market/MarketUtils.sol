@@ -22,10 +22,16 @@ import "../price/Price.sol";
 
 import "../utils/Calc.sol";
 import "../utils/Precision.sol";
+import "../chain/Chain.sol";
 
 // @title MarketUtils
 // @dev Library for market functions
 library MarketUtils {
+    // @dev floor for the claimable-collateral auto-release delay. The auto-release can never fire
+    // sooner than this, even if CLAIMABLE_COLLATERAL_DELAY is unset (0), so a too-fast release
+    // cannot be used to drain the pool via paired claimable / positive-price-impact activity.
+    uint256 public constant MIN_CLAIMABLE_COLLATERAL_DELAY = 1 days;
+
     using SignedMath for int256;
     using SafeCast for int256;
     using SafeCast for uint256;
@@ -2882,6 +2888,45 @@ library MarketUtils {
         );
 
         MarketEventUtils.emitUiFeeFactorUpdated(eventEmitter, account, uiFeeFactor);
+    }
+
+    // @dev Resolve the claimable-collateral factor for a (market, token, timeKey, account).
+    // Normally this is the factor a config keeper set (per-time or per-account, whichever is larger).
+    // If none was set the collateral would otherwise stay frozen until someone sets it, so once the
+    // withhold has aged past the delay the full amount auto-releases (factor = 100%) with no keeper
+    // action. The delay is floored at MIN_CLAIMABLE_COLLATERAL_DELAY. If the time divisor is unset
+    // (the claim feature is not configured) there is no reliable age, so no auto-release is applied.
+    function getClaimableCollateralFactor(
+        DataStore dataStore,
+        address market,
+        address token,
+        uint256 timeKey,
+        address account
+    ) public view returns (uint256) {
+        uint256 claimableFactorForTime = dataStore.getUint(Keys.claimableCollateralFactorKey(market, token, timeKey));
+        uint256 claimableFactorForAccount = dataStore.getUint(
+            Keys.claimableCollateralFactorKey(market, token, timeKey, account)
+        );
+        uint256 claimableFactor = claimableFactorForTime > claimableFactorForAccount
+            ? claimableFactorForTime
+            : claimableFactorForAccount;
+
+        if (claimableFactor == 0) {
+            uint256 divisor = dataStore.getUint(Keys.CLAIMABLE_COLLATERAL_TIME_DIVISOR);
+            if (divisor != 0) {
+                uint256 delay = dataStore.getUint(Keys.CLAIMABLE_COLLATERAL_DELAY);
+                if (delay < MIN_CLAIMABLE_COLLATERAL_DELAY) {
+                    delay = MIN_CLAIMABLE_COLLATERAL_DELAY;
+                }
+                // timeKey = timestamp / divisor at accrual, so timeKey * divisor <= now: no underflow
+                uint256 timeDiff = Chain.currentTimestamp() - timeKey * divisor;
+                if (timeDiff > delay) {
+                    claimableFactor = Precision.FLOAT_PRECISION;
+                }
+            }
+        }
+
+        return claimableFactor;
     }
 
     function validateMarketTokenBalance(
