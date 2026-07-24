@@ -3,6 +3,8 @@ import { BigNumber } from "ethers";
 export const EXCLUDED_CONFIG_KEYS = {
   ACCOUNT_DEPOSIT_LIST: true,
   ACCOUNT_ORDER_LIST: true,
+  // per-(account,market) pending-order counter; runtime state maintained by OrderStoreUtils, not Config-tunable
+  ACCOUNT_ORDER_COUNT_FOR_MARKET: true,
   ACCOUNT_POSITION_LIST: true,
   ACCOUNT_SHIFT_LIST: true,
   ACCOUNT_WITHDRAWAL_LIST: true,

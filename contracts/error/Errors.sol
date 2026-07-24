@@ -284,6 +284,7 @@ library Errors {
     error MaxTotalCallbackGasLimitForAutoCancelOrdersExceeded(uint256 totalCallbackGasLimit, uint256 maxTotalCallbackGasLimit);
     error InvalidReceiver(address receiver);
     error UnexpectedValidFromTime(uint256 orderType);
+    error MaxAccountOrderCountForMarketExceeded(address account, address market, uint256 count, uint256 maxOrderCount);
 
     // OrderStoreUtils errors
     error OrderNotFound(bytes32 key);
