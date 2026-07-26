@@ -47,6 +47,11 @@ contract GlvHandler is BaseHandler, ReentrancyGuard {
     ) external globalNonReentrant onlyOrderKeeper withOraclePrices(oracleParams) {
         uint256 startingGas = gasleft();
 
+        // hold off execution until the L2 sequencer grace window has passed, matching deposits,
+        // withdrawals and liquidations, so GLV requests cannot execute on prices from right after
+        // a sequencer outage
+        oracle.validateSequencerUp();
+
         DataStore _dataStore = dataStore;
 
         GlvDeposit.Props memory glvDeposit = GlvDepositStoreUtils.get(_dataStore, key);
@@ -142,6 +147,11 @@ contract GlvHandler is BaseHandler, ReentrancyGuard {
         OracleUtils.SetPricesParams calldata oracleParams
     ) external globalNonReentrant onlyOrderKeeper withOraclePrices(oracleParams) {
         uint256 startingGas = gasleft();
+
+        // hold off execution until the L2 sequencer grace window has passed, matching deposits,
+        // withdrawals and liquidations, so GLV requests cannot execute on prices from right after
+        // a sequencer outage
+        oracle.validateSequencerUp();
 
         DataStore _dataStore = dataStore;
 
@@ -262,6 +272,11 @@ contract GlvHandler is BaseHandler, ReentrancyGuard {
         OracleUtils.SetPricesParams calldata oracleParams
     ) external globalNonReentrant onlyOrderKeeper withOraclePrices(oracleParams) {
         uint256 startingGas = gasleft();
+
+        // hold off execution until the L2 sequencer grace window has passed, matching deposits,
+        // withdrawals and liquidations, so GLV requests cannot execute on prices from right after
+        // a sequencer outage
+        oracle.validateSequencerUp();
 
         DataStore _dataStore = dataStore;
 
