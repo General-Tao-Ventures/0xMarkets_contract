@@ -77,6 +77,19 @@ contract PythLazerFeedProvider is IOracleProvider {
         if (rawPrice <= 0) revert Errors.InvalidFeedPrice(token, int256(rawPrice));
         uint256 price = uint256(uint64(rawPrice));
 
+        // feedMultiplier is derived off-chain from the feed's decimals, so a wrong decimals entry
+        // silently mis-scales every price by a power of ten. The update carries the feed's own
+        // exponent: when both it and the expected value are available, require them to agree so a
+        // config drift fails closed instead of pricing the market 10^n off. Skipped when the feed
+        // omits the property or no expectation is configured, so this never halts pricing on its own.
+        int256 expectedExponent = dataStore.getInt(Keys.pythLazerFeedExponentKey(token));
+        if (expectedExponent != 0 && PythLazerLib.isExponentRequested(feed) && PythLazerLib.hasExponent(feed)) {
+            int256 actualExponent = int256(PythLazerLib.getExponent(feed));
+            if (actualExponent != expectedExponent) {
+                revert Errors.InvalidPythLazerFeedExponent(token, actualExponent, expectedExponent);
+            }
+        }
+
         // A legitimately signed update can carry confidence == 0, which the Lazer library parses as
         // ApplicableButMissing so getConfidence would revert and halt pricing for the whole batch.
         // Treat a missing confidence as zero spread (band collapses to the mid price, same as a zero

@@ -1,6 +1,6 @@
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { TokenConfig } from "../config/tokens";
-import { setBoolIfDifferent, setUintIfDifferent } from "../utils/dataStore";
+import { setBoolIfDifferent, setIntIfDifferent, setUintIfDifferent } from "../utils/dataStore";
 import * as keys from "../utils/keys";
 import { expandDecimals } from "../utils/math";
 
@@ -43,6 +43,15 @@ const func = async ({ gmx }: HardhatRuntimeEnvironment) => {
       keys.pythLazerFeedMultiplierKey(token.address),
       expandDecimals(1, 60 - token.decimals - token.pythLazerFeedDecimals),
       `Pyth Lazer feed multiplier for ${tokenSymbol} ${token.address}`
+    );
+
+    // Record the exponent the multiplier above was derived from. The provider compares it against
+    // the exponent carried in each signed update, so a decimals entry that does not match the live
+    // feed reverts instead of mis-scaling the price by a power of ten.
+    await setIntIfDifferent(
+      keys.pythLazerFeedExponentKey(token.address),
+      -token.pythLazerFeedDecimals,
+      `Pyth Lazer feed exponent for ${tokenSymbol} ${token.address}`
     );
 
     // default to FLOAT_PRECISION (1e30) so the confidence band is used as-is;

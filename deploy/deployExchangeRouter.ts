@@ -23,6 +23,7 @@ const func = createDeployFunction({
     "CallbackUtils",
     "DepositStoreUtils",
     "FeeUtils",
+    "MarketCollateralUtils",
     "MarketEventUtils",
     "MarketStoreUtils",
     "MarketUtils",

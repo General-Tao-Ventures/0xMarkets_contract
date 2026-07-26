@@ -246,7 +246,7 @@ describe("PythLazerFeedProvider", () => {
     const multiplier = FLOAT_PRECISION; // identity, so the resolved band is just price ∓ confidence
     const spreadFactor = FLOAT_PRECISION;
 
-    await config.connect(user0).setPythLazerFeed(token, feedId, false, multiplier, spreadFactor);
+    await config.connect(user0).setPythLazerFeed(token, feedId, false, multiplier, spreadFactor, -8);
 
     // the provider reads these via getUint / getBool — they must be populated
     expect(await dataStore.getUint(keys.pythLazerFeedIdKey(token))).to.eq(feedId);
@@ -282,11 +282,11 @@ describe("PythLazerFeedProvider", () => {
     await grantRole(roleStore, user0.address, "CONFIG_KEEPER");
 
     const token = usdc.address;
-    await config.connect(user0).setPythLazerFeed(token, 327, false, FLOAT_PRECISION, FLOAT_PRECISION);
+    await config.connect(user0).setPythLazerFeed(token, 327, false, FLOAT_PRECISION, FLOAT_PRECISION, -8);
 
     // a second pyth-lazer config must not silently overwrite
     await expect(
-      config.connect(user0).setPythLazerFeed(token, 333, false, FLOAT_PRECISION, FLOAT_PRECISION)
+      config.connect(user0).setPythLazerFeed(token, 333, false, FLOAT_PRECISION, FLOAT_PRECISION, -8)
     ).to.be.revertedWithCustomError(errorsContract, "PythLazerFeedIdAlreadyExistsForToken");
 
     // and a data-stream feed must not be added on top of a pyth-lazer feed
@@ -300,20 +300,20 @@ describe("PythLazerFeedProvider", () => {
     const token = usdc.address;
 
     await expect(
-      config.connect(user0).setPythLazerFeed(token, 0, false, FLOAT_PRECISION, FLOAT_PRECISION)
+      config.connect(user0).setPythLazerFeed(token, 0, false, FLOAT_PRECISION, FLOAT_PRECISION, -8)
     ).to.be.revertedWithCustomError(errorsContract, "InvalidPythLazerFeedId");
 
     // 2**32 is one past the on-wire uint32 range.
     await expect(
       config
         .connect(user0)
-        .setPythLazerFeed(token, ethers.BigNumber.from(2).pow(32), false, FLOAT_PRECISION, FLOAT_PRECISION)
+        .setPythLazerFeed(token, ethers.BigNumber.from(2).pow(32), false, FLOAT_PRECISION, FLOAT_PRECISION, -8)
     ).to.be.revertedWithCustomError(errorsContract, "InvalidPythLazerFeedId");
 
     // uint32 max is accepted.
     await config
       .connect(user0)
-      .setPythLazerFeed(token, ethers.BigNumber.from(2).pow(32).sub(1), false, FLOAT_PRECISION, FLOAT_PRECISION);
+      .setPythLazerFeed(token, ethers.BigNumber.from(2).pow(32).sub(1), false, FLOAT_PRECISION, FLOAT_PRECISION, -8);
   });
 
   it("applies feed multiplier (the hardcoded exponent config) after confidence scaling", async () => {

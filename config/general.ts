@@ -56,6 +56,7 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
 
       minPositionSizeUsd: decimalToFloat(1),
       claimableCollateralTimeDivisor: 60 * 60,
+      claimableCollateralDelay: 60 * 60 * 24 * 90, // 90d backstop: withheld collateral auto-releases if keeper never sets a factor
 
       positionFeeVeAlphaFactor: 0,
       positionFeeTreasuryFactor: 0,
@@ -122,6 +123,7 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
 
     minPositionSizeUsd: decimalToFloat(1),
     claimableCollateralTimeDivisor: 60 * 60,
+    claimableCollateralDelay: 60 * 60 * 24 * 90, // 90d backstop: withheld collateral auto-releases if keeper never sets a factor
 
     positionFeeVeAlphaFactor: 0,
     positionFeeTreasuryFactor: 0,

@@ -243,6 +243,7 @@ library Errors {
     error EmptyPythLazerFeedData(address token);
     error EmptyPythLazerFeedId(address token);
     error EmptyPythLazerFeedMultiplier(address token);
+    error InvalidPythLazerFeedExponent(address token, int256 actualExponent, int256 expectedExponent);
     error EmptyPythHermesFeedMultiplier(address token);
     error InvalidPythLazerScaledConfidence(address token, uint256 scaledConfidence, uint256 price);
     error InvalidPythLazerFeedId(address token, uint256 pythLazerFeedId);

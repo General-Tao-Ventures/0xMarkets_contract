@@ -130,7 +130,7 @@ const config: {
     WTI: {
       decimals: 6,
       pythLazerFeedId: 657, // USOILSPOT
-      pythLazerFeedDecimals: 3,
+      pythLazerFeedDecimals: 5,
       isAsset: true,
     },
     TAO: {
@@ -198,7 +198,7 @@ const config: {
     WTI: {
       decimals: 6,
       pythLazerFeedId: 657, // USOILSPOT
-      pythLazerFeedDecimals: 3,
+      pythLazerFeedDecimals: 5,
       isAsset: true,
     },
     TAO: {

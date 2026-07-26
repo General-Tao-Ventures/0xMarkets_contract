@@ -53,7 +53,7 @@ library MarketCollateralUtils {
         uint256 timeKey,
         address account,
         address receiver
-    ) internal returns (uint256) {
+    ) external returns (uint256) {
         uint256 claimableAmount = dataStore.getUint(Keys.claimableCollateralAmountKey(market, token, timeKey, account));
 
         uint256 claimableFactor;
@@ -68,6 +68,18 @@ library MarketCollateralUtils {
             claimableFactor = claimableFactorForTime > claimableFactorForAccount
                 ? claimableFactorForTime
                 : claimableFactorForAccount;
+
+            // Trustless backstop (restores GMX's CLAIMABLE_COLLATERAL_DELAY): if no factor was ever set,
+            // auto-release 100% once the delay past the collateral's time window has elapsed, so a
+            // missing keeper factor cannot freeze the withheld collateral forever. Gated on a configured
+            // delay + divisor so it never fires when the mechanism is unconfigured.
+            if (claimableFactor == 0) {
+                uint256 divisor = dataStore.getUint(Keys.CLAIMABLE_COLLATERAL_TIME_DIVISOR);
+                uint256 delay = dataStore.getUint(Keys.CLAIMABLE_COLLATERAL_DELAY);
+                if (divisor > 0 && delay > 0 && Chain.currentTimestamp() > timeKey * divisor + delay) {
+                    claimableFactor = Precision.FLOAT_PRECISION;
+                }
+            }
         }
 
         if (claimableFactor > Precision.FLOAT_PRECISION) {

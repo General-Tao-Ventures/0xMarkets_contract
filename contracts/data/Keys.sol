@@ -441,6 +441,9 @@ library Keys {
     bytes32 public constant CLAIMABLE_COLLATERAL_FACTOR = keccak256(abi.encode("CLAIMABLE_COLLATERAL_FACTOR"));
     // @dev key for claimable collateral time divisor
     bytes32 public constant CLAIMABLE_COLLATERAL_TIME_DIVISOR = keccak256(abi.encode("CLAIMABLE_COLLATERAL_TIME_DIVISOR"));
+    // @dev key for the delay after which withheld claimable collateral auto-releases (100%) when no
+    //      claimable factor was ever set, so funds cannot be frozen by keeper inaction (GMX backstop)
+    bytes32 public constant CLAIMABLE_COLLATERAL_DELAY = keccak256(abi.encode("CLAIMABLE_COLLATERAL_DELAY"));
     // @dev key for claimed collateral amount
     bytes32 public constant CLAIMED_COLLATERAL_AMOUNT = keccak256(abi.encode("CLAIMED_COLLATERAL_AMOUNT"));
     bytes32 public constant IGNORE_OPEN_INTEREST_FOR_USAGE_FACTOR = keccak256(abi.encode("IGNORE_OPEN_INTEREST_FOR_USAGE_FACTOR"));
@@ -543,6 +546,8 @@ library Keys {
     bytes32 public constant PYTH_LAZER_FEED_INVERTED = keccak256(abi.encode("PYTH_LAZER_FEED_INVERTED"));
     // @dev key for Pyth Lazer feed multiplier
     bytes32 public constant PYTH_LAZER_FEED_MULTIPLIER = keccak256(abi.encode("PYTH_LAZER_FEED_MULTIPLIER"));
+    // @dev the feed exponent the multiplier was derived from, so a config/feed mismatch is caught on-chain
+    bytes32 public constant PYTH_LAZER_FEED_EXPONENT = keccak256(abi.encode("PYTH_LAZER_FEED_EXPONENT"));
     // @dev key for Pyth Lazer feed per-token spread factor applied to confidence (FLOAT_PRECISION-scaled)
     bytes32 public constant PYTH_LAZER_FEED_SPREAD_FACTOR = keccak256(abi.encode("PYTH_LAZER_FEED_SPREAD_FACTOR"));
     bytes32 public constant PYTH_HERMES_FEED_MULTIPLIER = keccak256(abi.encode("PYTH_HERMES_FEED_MULTIPLIER"));
@@ -2364,6 +2369,16 @@ library Keys {
     function pythLazerFeedMultiplierKey(address token) internal pure returns (bytes32) {
         return keccak256(abi.encode(
             PYTH_LAZER_FEED_MULTIPLIER,
+            token
+        ));
+    }
+
+    // @dev key for the expected Pyth Lazer feed exponent
+    // @param token the token to get the key for
+    // @return key for the expected Pyth Lazer feed exponent
+    function pythLazerFeedExponentKey(address token) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            PYTH_LAZER_FEED_EXPONENT,
             token
         ));
     }

@@ -161,6 +161,7 @@ export async function initOracleConfigForTokens({ write }) {
           token.pythLazerFeedInverted ? true : false,
           pythLazerFeedMultiplier,
           pythLazerFeedSpreadFactor,
+          -token.pythLazerFeedDecimals,
         ])
       );
     }

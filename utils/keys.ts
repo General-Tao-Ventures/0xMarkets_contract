@@ -75,6 +75,7 @@ export const CLAIMABLE_FUNDING_AMOUNT = hashString("CLAIMABLE_FUNDING_AMOUNT");
 export const CLAIMABLE_COLLATERAL_AMOUNT = hashString("CLAIMABLE_COLLATERAL_AMOUNT");
 export const CLAIMABLE_COLLATERAL_FACTOR = hashString("CLAIMABLE_COLLATERAL_FACTOR");
 export const CLAIMABLE_COLLATERAL_TIME_DIVISOR = hashString("CLAIMABLE_COLLATERAL_TIME_DIVISOR");
+export const CLAIMABLE_COLLATERAL_DELAY = hashString("CLAIMABLE_COLLATERAL_DELAY");
 
 export const CLAIMABLE_UI_FEE_AMOUNT = hashString("CLAIMABLE_UI_FEE_AMOUNT");
 export const AFFILIATE_REWARD = hashString("AFFILIATE_REWARD");
@@ -293,6 +294,7 @@ export const BASELINE_SWAP_PER_DAY = hashString("BASELINE_SWAP_PER_DAY");
 export const PYTH_LAZER_FEED_ID = hashString("PYTH_LAZER_FEED_ID");
 export const PYTH_LAZER_FEED_INVERTED = hashString("PYTH_LAZER_FEED_INVERTED");
 export const PYTH_LAZER_FEED_MULTIPLIER = hashString("PYTH_LAZER_FEED_MULTIPLIER");
+export const PYTH_LAZER_FEED_EXPONENT = hashString("PYTH_LAZER_FEED_EXPONENT");
 export const PYTH_LAZER_FEED_SPREAD_FACTOR = hashString("PYTH_LAZER_FEED_SPREAD_FACTOR");
 export const PYTH_HERMES_FEED_MULTIPLIER = hashString("PYTH_HERMES_FEED_MULTIPLIER");
 
@@ -932,6 +934,10 @@ export function pythLazerFeedInvertedKey(token: string) {
 
 export function pythLazerFeedMultiplierKey(token: string) {
   return hashData(["bytes32", "address"], [PYTH_LAZER_FEED_MULTIPLIER, token]);
+}
+
+export function pythLazerFeedExponentKey(token: string) {
+  return hashData(["bytes32", "address"], [PYTH_LAZER_FEED_EXPONENT, token]);
 }
 
 export function pythLazerFeedSpreadFactorKey(token: string) {

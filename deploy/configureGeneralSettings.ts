@@ -45,6 +45,12 @@ const func = async ({ gmx }: HardhatRuntimeEnvironment) => {
   );
 
   await setUintIfDifferent(
+    keys.CLAIMABLE_COLLATERAL_DELAY,
+    generalConfig.claimableCollateralDelay,
+    "claimable collateral delay"
+  );
+
+  await setUintIfDifferent(
     keys.MAX_EXECUTION_FEE_MULTIPLIER_FACTOR,
     generalConfig.maxExecutionFeeMultiplierFactor,
     "max execution fee multiplier factor"
