@@ -153,7 +153,8 @@ contract Config is ReentrancyGuard, RoleModule, BasicMulticall {
         uint256 pythLazerFeedId,
         bool pythLazerFeedInverted,
         uint256 pythLazerFeedMultiplier,
-        uint256 pythLazerFeedSpreadFactor
+        uint256 pythLazerFeedSpreadFactor,
+        int256 pythLazerFeedExponent
     ) external onlyConfigKeeper nonReentrant {
         if (dataStore.getUint(Keys.pythLazerFeedIdKey(token)) != 0) {
             revert Errors.PythLazerFeedIdAlreadyExistsForToken(token);
@@ -175,6 +176,9 @@ contract Config is ReentrancyGuard, RoleModule, BasicMulticall {
         dataStore.setBool(Keys.pythLazerFeedInvertedKey(token), pythLazerFeedInverted);
         dataStore.setUint(Keys.pythLazerFeedMultiplierKey(token), pythLazerFeedMultiplier);
         dataStore.setUint(Keys.pythLazerFeedSpreadFactorKey(token), pythLazerFeedSpreadFactor);
+        // written with the multiplier it was derived from: the provider rejects an update whose own
+        // exponent disagrees, so the two must never be set apart
+        dataStore.setInt(Keys.pythLazerFeedExponentKey(token), pythLazerFeedExponent);
 
         EventUtils.EventLogData memory eventData;
         eventData.addressItems.initItems(1);
@@ -185,6 +189,8 @@ contract Config is ReentrancyGuard, RoleModule, BasicMulticall {
         eventData.uintItems.setItem(0, "pythLazerFeedId", pythLazerFeedId);
         eventData.uintItems.setItem(1, "pythLazerFeedMultiplier", pythLazerFeedMultiplier);
         eventData.uintItems.setItem(2, "pythLazerFeedSpreadFactor", pythLazerFeedSpreadFactor);
+        eventData.intItems.initItems(1);
+        eventData.intItems.setItem(0, "pythLazerFeedExponent", pythLazerFeedExponent);
 
         eventEmitter.emitEventLog1("ConfigSetPythLazerFeed", Cast.toBytes32(token), eventData);
     }

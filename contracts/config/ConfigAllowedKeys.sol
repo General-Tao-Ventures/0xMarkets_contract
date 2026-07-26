@@ -132,6 +132,7 @@ library ConfigAllowedKeys {
         allowedBaseKeys[Keys.MMR_TUNING] = true;
         allowedBaseKeys[Keys.MIN_COLLATERAL_FACTOR_FOR_OPEN_INTEREST_MULTIPLIER] = true;
         allowedBaseKeys[Keys.MIN_COLLATERAL_USD] = true;
+        allowedBaseKeys[Keys.CLAIMABLE_COLLATERAL_DELAY] = true;
 
         allowedBaseKeys[Keys.VIRTUAL_TOKEN_ID] = true;
         allowedBaseKeys[Keys.VIRTUAL_MARKET_ID] = true;
@@ -216,6 +217,7 @@ library ConfigAllowedKeys {
         allowedBaseKeys[Keys.PYTH_LAZER_FEED_ID] = true;
         allowedBaseKeys[Keys.PYTH_LAZER_FEED_INVERTED] = true;
         allowedBaseKeys[Keys.PYTH_LAZER_FEED_MULTIPLIER] = true;
+        allowedBaseKeys[Keys.PYTH_LAZER_FEED_EXPONENT] = true;
         allowedBaseKeys[Keys.PYTH_LAZER_FEED_SPREAD_FACTOR] = true;
     }
 }
