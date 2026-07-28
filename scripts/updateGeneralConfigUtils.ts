@@ -87,6 +87,14 @@ const processGeneralConfig = async ({ generalConfig, oracleConfig, handleConfig 
     `maxCallbackGasLimit`
   );
 
+  await handleConfig(
+    "uint",
+    keys.MAX_RELAY_FEE_SWAP_USD_FOR_SUBACCOUNT,
+    "0x",
+    generalConfig.maxRelayFeeSwapUsdForSubaccount,
+    `maxRelayFeeSwapUsdForSubaccount`
+  );
+
   await handleConfig("uint", keys.MAX_SWAP_PATH_LENGTH, "0x", generalConfig.maxSwapPathLength, `maxSwapPathLength`);
 
   await handleConfig("uint", keys.MIN_COLLATERAL_USD, "0x", generalConfig.minCollateralUsd, `minCollateralUsd`);

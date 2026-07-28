@@ -545,6 +545,11 @@ library Keys {
     // @dev key for Pyth Lazere feed inverted flag (e.g. USD/JPY for JPY)
     bytes32 public constant PYTH_LAZER_FEED_INVERTED = keccak256(abi.encode("PYTH_LAZER_FEED_INVERTED"));
     // @dev key for Pyth Lazer feed multiplier
+    // @dev bounds the USD size of a relay fee swap initiated by a subaccount; a subaccount is
+    // authorised by action count, not amount, so without this it can route an arbitrary amount
+    // of the main account's tokens through a value-destroying atomic swap
+    bytes32 public constant MAX_RELAY_FEE_SWAP_USD_FOR_SUBACCOUNT =
+        keccak256(abi.encode("MAX_RELAY_FEE_SWAP_USD_FOR_SUBACCOUNT"));
     bytes32 public constant PYTH_LAZER_FEED_MULTIPLIER = keccak256(abi.encode("PYTH_LAZER_FEED_MULTIPLIER"));
     // @dev the feed exponent the multiplier was derived from, so a config/feed mismatch is caught on-chain
     bytes32 public constant PYTH_LAZER_FEED_EXPONENT = keccak256(abi.encode("PYTH_LAZER_FEED_EXPONENT"));

@@ -52,6 +52,9 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
 
       maxSwapPathLength: 5,
       maxCallbackGasLimit: 2_000_000,
+      // bounds a subaccount-initiated relay fee swap; the relay is unused today, this is the
+      // safeguard for if it is ever enabled
+      maxRelayFeeSwapUsdForSubaccount: decimalToFloat(10_000),
       minCollateralUsd: decimalToFloat(1),
 
       minPositionSizeUsd: decimalToFloat(1),
@@ -119,6 +122,7 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
 
     maxSwapPathLength: 3,
     maxCallbackGasLimit: 2_000_000,
+    maxRelayFeeSwapUsdForSubaccount: decimalToFloat(10_000),
     minCollateralUsd: decimalToFloat(1),
 
     minPositionSizeUsd: decimalToFloat(1),

@@ -24,6 +24,7 @@ library Errors {
 
     // CallbackUtils errors
     error MaxCallbackGasLimitExceeded(uint256 callbackGasLimit, uint256 maxCallbackGasLimit);
+    error MaxRelayFeeSwapForSubaccountExceeded(uint256 relayFeeSwapUsd);
     error InsufficientGasLeftForCallback(uint256 gasToBeForwarded, uint256 callbackGasLimit);
 
     // Config errors
