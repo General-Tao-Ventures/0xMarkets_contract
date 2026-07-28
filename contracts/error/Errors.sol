@@ -393,6 +393,7 @@ library Errors {
 
     // InsuranceFund errors
     error InsuranceFundEpochNotYetElapsed(uint256 currentTime, uint256 epochStart, uint256 epochLength);
+    error EmptyInsuranceFundAddress();
 
     // Array errors
     error CompactedArrayOutOfBounds(
