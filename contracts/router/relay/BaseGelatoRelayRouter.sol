@@ -334,6 +334,11 @@ abstract contract BaseGelatoRelayRouter is GelatoRelayContext, ReentrancyGuard, 
         } else if (relayParams.fee.feeSwapPath.length != 0) {
             // a subaccount is authorised by action count, never by amount, so an uncapped fee swap
             // lets it burn the main account's balance through the atomic swap fee
+            if (isSubaccount) {
+                SubaccountUtils.validateRelayFeeSwap(
+                    contracts.dataStore, oracle, relayParams.fee.feeToken, relayParams.fee.feeAmount
+                );
+            }
             _sendTokens(account, relayParams.fee.feeToken, address(contracts.orderVault), relayParams.fee.feeAmount);
             outputAmount = _swapFeeTokens(contracts, wnt, relayParams.fee);
         } else if (relayParams.fee.feeToken == wnt) {
