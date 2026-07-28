@@ -592,13 +592,15 @@ describe("Config", () => {
       config.connect(user0).setPriceFeed(token, ethers.constants.AddressZero, mult, heartbeat, 0)
     ).to.be.revertedWithCustomError(errorsContract, "EmptyChainlinkPriceFeed");
 
-    await expect(
-      config.connect(user0).setPriceFeed(token, feed, 0, heartbeat, 0)
-    ).to.be.revertedWithCustomError(errorsContract, "EmptyChainlinkPriceFeedMultiplier");
+    await expect(config.connect(user0).setPriceFeed(token, feed, 0, heartbeat, 0)).to.be.revertedWithCustomError(
+      errorsContract,
+      "EmptyChainlinkPriceFeedMultiplier"
+    );
 
-    await expect(
-      config.connect(user0).setPriceFeed(token, feed, mult, 0, 0)
-    ).to.be.revertedWithCustomError(errorsContract, "EmptyChainlinkPriceFeedHeartbeat");
+    await expect(config.connect(user0).setPriceFeed(token, feed, mult, 0, 0)).to.be.revertedWithCustomError(
+      errorsContract,
+      "EmptyChainlinkPriceFeedHeartbeat"
+    );
 
     // valid config (stablePrice 0 is allowed) goes through
     await config.connect(user0).setPriceFeed(token, feed, mult, heartbeat, 0);
@@ -624,6 +626,19 @@ describe("Config", () => {
     await expect(
       config.connect(user0).setUint(keys.POSITION_FEE_BUYBACK_FACTOR, "0x", percentageToFloat("30%").add(1))
     ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+  });
+
+  it("setBaselineSwap writes both keys for a config keeper", async () => {
+    const market = ethUsdMarket.marketToken;
+    const perDay = decimalToFloat(1, 4);
+
+    await config["setBaselineSwap(address,uint256,bool)"](market, perDay, true);
+    expect(await dataStore.getUint(keys.baselineSwapPerDayKey(market))).eq(perDay);
+    expect(await dataStore.getBool(keys.baselineSwapLongsPayShortsKey(market))).eq(true);
+
+    // the reversed overload flips the direction it stores
+    await config["setBaselineSwap(address,uint256,bool,bool)"](market, perDay, true, true);
+    expect(await dataStore.getBool(keys.baselineSwapLongsPayShortsKey(market))).eq(false);
   });
 
   it("setDataStream", async () => {
