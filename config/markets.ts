@@ -560,6 +560,9 @@ const config: {
       tokens: { indexToken: "EUR", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
+      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
+      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
+      ...singleTokenMarketConfig,
       ...fxMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -571,6 +574,9 @@ const config: {
       tokens: { indexToken: "GBP", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
+      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
+      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
+      ...singleTokenMarketConfig,
       ...fxMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -583,6 +589,9 @@ const config: {
       tokens: { indexToken: "GOLD", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
+      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
+      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
+      ...singleTokenMarketConfig,
       ...commodityMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -595,6 +604,9 @@ const config: {
       tokens: { indexToken: "XAG", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
+      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
+      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
+      ...singleTokenMarketConfig,
       ...commodityMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -607,6 +619,9 @@ const config: {
       tokens: { indexToken: "JPY", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
+      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
+      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
+      ...singleTokenMarketConfig,
       ...fxMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -619,6 +634,9 @@ const config: {
       tokens: { indexToken: "WTI", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
+      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
+      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
+      ...singleTokenMarketConfig,
       ...commodityMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -631,6 +649,9 @@ const config: {
       tokens: { indexToken: "WBTC", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
+      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
+      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
+      ...singleTokenMarketConfig,
       ...cryptoMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -642,6 +663,9 @@ const config: {
       tokens: { indexToken: "WETH", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
+      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
+      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
+      ...singleTokenMarketConfig,
       ...cryptoMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -654,6 +678,9 @@ const config: {
       tokens: { indexToken: "TAO", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
+      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
+      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
+      ...singleTokenMarketConfig,
       ...cryptoMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
