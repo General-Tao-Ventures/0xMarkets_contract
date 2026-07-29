@@ -571,9 +571,11 @@ const config: {
       ...syntheticMarketConfig,
       ...singleAssetFeeOverrides,
       ...fxMarketOverrides,
-      maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxPoolUsdForDeposit: decimalToFloat(1_000_000_000), // 1B USD
+      // Both legs are the same token, so each side is valued at half the raw pool and these caps
+      // are per side. Halved so the raw pool totals the 1B these previously read as.
+      maxLongTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxShortTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxPoolUsdForDeposit: decimalToFloat(500_000_000), // 500M per side, 1B total
       maxOpenInterestForLongs: decimalToFloat(50_000_000),
       maxOpenInterestForShorts: decimalToFloat(50_000_000),
     },
@@ -583,9 +585,11 @@ const config: {
       ...syntheticMarketConfig,
       ...singleAssetFeeOverrides,
       ...fxMarketOverrides,
-      maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxPoolUsdForDeposit: decimalToFloat(1_000_000_000), // 1B USD
+      // Both legs are the same token, so each side is valued at half the raw pool and these caps
+      // are per side. Halved so the raw pool totals the 1B these previously read as.
+      maxLongTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxShortTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxPoolUsdForDeposit: decimalToFloat(500_000_000), // 500M per side, 1B total
       maxOpenInterestForLongs: decimalToFloat(50_000_000),
       maxOpenInterestForShorts: decimalToFloat(50_000_000),
     },
@@ -596,9 +600,11 @@ const config: {
       ...syntheticMarketConfig,
       ...singleAssetFeeOverrides,
       ...commodityMarketOverrides,
-      maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxPoolUsdForDeposit: decimalToFloat(1_000_000_000), // 1B USD
+      // Both legs are the same token, so each side is valued at half the raw pool and these caps
+      // are per side. Halved so the raw pool totals the 1B these previously read as.
+      maxLongTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxShortTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxPoolUsdForDeposit: decimalToFloat(500_000_000), // 500M per side, 1B total
       maxOpenInterestForLongs: decimalToFloat(50_000_000),
       maxOpenInterestForShorts: decimalToFloat(50_000_000),
     },
@@ -609,9 +615,11 @@ const config: {
       ...syntheticMarketConfig,
       ...singleAssetFeeOverrides,
       ...commodityMarketOverrides,
-      maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxPoolUsdForDeposit: decimalToFloat(1_000_000_000), // 1B USD
+      // Both legs are the same token, so each side is valued at half the raw pool and these caps
+      // are per side. Halved so the raw pool totals the 1B these previously read as.
+      maxLongTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxShortTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxPoolUsdForDeposit: decimalToFloat(500_000_000), // 500M per side, 1B total
       maxOpenInterestForLongs: decimalToFloat(50_000_000),
       maxOpenInterestForShorts: decimalToFloat(50_000_000),
     },
@@ -622,9 +630,11 @@ const config: {
       ...syntheticMarketConfig,
       ...singleAssetFeeOverrides,
       ...fxMarketOverrides,
-      maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxPoolUsdForDeposit: decimalToFloat(1_000_000_000), // 1B USD
+      // Both legs are the same token, so each side is valued at half the raw pool and these caps
+      // are per side. Halved so the raw pool totals the 1B these previously read as.
+      maxLongTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxShortTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxPoolUsdForDeposit: decimalToFloat(500_000_000), // 500M per side, 1B total
       maxOpenInterestForLongs: decimalToFloat(50_000_000),
       maxOpenInterestForShorts: decimalToFloat(50_000_000),
     },
@@ -635,9 +645,11 @@ const config: {
       ...syntheticMarketConfig,
       ...singleAssetFeeOverrides,
       ...commodityMarketOverrides,
-      maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxPoolUsdForDeposit: decimalToFloat(1_000_000_000), // 1B USD
+      // Both legs are the same token, so each side is valued at half the raw pool and these caps
+      // are per side. Halved so the raw pool totals the 1B these previously read as.
+      maxLongTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxShortTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxPoolUsdForDeposit: decimalToFloat(500_000_000), // 500M per side, 1B total
       maxOpenInterestForLongs: decimalToFloat(50_000_000),
       maxOpenInterestForShorts: decimalToFloat(50_000_000),
     },
@@ -648,9 +660,11 @@ const config: {
       ...syntheticMarketConfig,
       ...singleAssetFeeOverrides,
       ...cryptoMarketOverrides,
-      maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxPoolUsdForDeposit: decimalToFloat(1_000_000_000), // 1B USD
+      // Both legs are the same token, so each side is valued at half the raw pool and these caps
+      // are per side. Halved so the raw pool totals the 1B these previously read as.
+      maxLongTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxShortTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxPoolUsdForDeposit: decimalToFloat(500_000_000), // 500M per side, 1B total
       maxOpenInterestForLongs: decimalToFloat(50_000_000),
       maxOpenInterestForShorts: decimalToFloat(50_000_000),
     },
@@ -660,9 +674,11 @@ const config: {
       ...syntheticMarketConfig,
       ...singleAssetFeeOverrides,
       ...cryptoMarketOverrides,
-      maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxPoolUsdForDeposit: decimalToFloat(1_000_000_000), // 1B USD
+      // Both legs are the same token, so each side is valued at half the raw pool and these caps
+      // are per side. Halved so the raw pool totals the 1B these previously read as.
+      maxLongTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxShortTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxPoolUsdForDeposit: decimalToFloat(500_000_000), // 500M per side, 1B total
       maxOpenInterestForLongs: decimalToFloat(50_000_000),
       maxOpenInterestForShorts: decimalToFloat(50_000_000),
     },
@@ -673,9 +689,11 @@ const config: {
       ...syntheticMarketConfig,
       ...singleAssetFeeOverrides,
       ...cryptoMarketOverrides,
-      maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
-      maxPoolUsdForDeposit: decimalToFloat(1_000_000_000), // 1B USD
+      // Both legs are the same token, so each side is valued at half the raw pool and these caps
+      // are per side. Halved so the raw pool totals the 1B these previously read as.
+      maxLongTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxShortTokenPoolAmount: expandDecimals(500_000_000, 6), // 500M per side, 1B total
+      maxPoolUsdForDeposit: decimalToFloat(500_000_000), // 500M per side, 1B total
       maxOpenInterestForLongs: decimalToFloat(50_000_000),
       maxOpenInterestForShorts: decimalToFloat(50_000_000),
     },
