@@ -567,18 +567,17 @@ describe("Config", () => {
     await config.connect(user0).setUint(keys.INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR, market, percentageToFloat("1%"));
   });
 
-  it("caps LIQUIDATION_FEE_FACTOR at 30%", async () => {
+  it("caps LIQUIDATION_FEE_FACTOR at 100%", async () => {
     const market = encodeData(["address"], [ethUsdMarket.marketToken]);
 
-    // the intended 20% goes through
     await config.connect(user0).setUint(keys.LIQUIDATION_FEE_FACTOR, market, percentageToFloat("20%"));
 
-    // exactly 30% (the fat-finger ceiling) is accepted
-    await config.connect(user0).setUint(keys.LIQUIDATION_FEE_FACTOR, market, percentageToFloat("30%"));
+    // the fee is charged on remaining collateral, so 100% is a valid setting
+    await config.connect(user0).setUint(keys.LIQUIDATION_FEE_FACTOR, market, percentageToFloat("100%"));
 
-    // anything above 30% reverts
+    // above 100% the fee would exceed the collateral it comes from
     await expect(
-      config.connect(user0).setUint(keys.LIQUIDATION_FEE_FACTOR, market, percentageToFloat("30%").add(1))
+      config.connect(user0).setUint(keys.LIQUIDATION_FEE_FACTOR, market, percentageToFloat("100%").add(1))
     ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
   });
 
