@@ -475,6 +475,91 @@ const cryptoMarketOverrides: Partial<BaseMarketConfig> = {
   leverageLadder: cryptoLeverageLadder,
 };
 
+// Base mainnet. Transcribed from the "New Values" column of the GMX Base Parameters sheet
+// (Params FX / Params Commodities / Params Crypto tabs, which agree on everything below).
+// Rows the sheet leaves blank — every funding parameter, the impact pool rate and minimum —
+// keep their baseMarketConfig value.
+//
+// Four of these disagree with values already in this file and are pending confirmation:
+// liquidationFeeFactor (sheet 100%, here 20%, and the config validator caps the key at 30%
+// so this reverts on deploy), the five maxPnlFactor rows (sheet 0, here 90/85/77/90/70),
+// the three max position impact factors (sheet 100%, here 0.5%/0.5%/0), and the two
+// position impact factors, which the sheet has the opposite way round to both this file
+// and the deployed chain.
+const baseMainnetMarketConfig: Partial<BaseMarketConfig> = {
+  ...baseMarketConfig,
+  ...singleAssetFeeOverrides,
+
+  reserveFactor: percentageToFloat("95%"),
+  openInterestReserveFactor: percentageToFloat("60%"),
+
+  minCollateralFactorForOpenInterestMultiplier: 0,
+
+  // Both legs are USDC, so each side is valued at half the raw pool and these caps bind per
+  // side. Halved so the raw pool totals the 1B the sheet asks for.
+  maxLongTokenPoolAmount: expandDecimals(500_000_000, 6),
+  maxShortTokenPoolAmount: expandDecimals(500_000_000, 6),
+  maxPoolUsdForDeposit: decimalToFloat(500_000_000),
+
+  maxOpenInterest: decimalToFloat(50_000_000),
+
+  maxPnlFactorForTraders: bigNumberify(0),
+  maxPnlFactorForAdl: bigNumberify(0),
+  minPnlFactorAfterAdl: bigNumberify(0),
+  maxPnlFactorForDeposits: bigNumberify(0),
+  maxPnlFactorForWithdrawals: bigNumberify(0),
+
+  liquidationFeeFactor: decimalToFloat(1),
+
+  negativePositionImpactFactor: exponentToFloat("8e-8"),
+  positivePositionImpactFactor: exponentToFloat("1e-7"),
+  positionImpactExponentFactor: exponentToFloat("1.45e0"),
+
+  negativeMaxPositionImpactFactor: decimalToFloat(1),
+  positiveMaxPositionImpactFactor: decimalToFloat(1),
+  maxPositionImpactFactorForLiquidations: decimalToFloat(1),
+
+  minCollateralUsd: decimalToFloat(5, 0),
+
+  aboveOptimalUsageBorrowingFactor: 0,
+  baseBorrowingFactor: 0,
+  optimalUsageFactor: 0,
+  borrowingFactor: exponentToFloat("5.6e-10").div(SECONDS_PER_DAY),
+  borrowingExponentFactor: exponentToFloat("1.73e0"),
+
+  minLeverage: decimalToFloat(1),
+  minMmr: percentageToFloat("1%"),
+  maxMmr: percentageToFloat("20%"),
+  mmrTuning: percentageToFloat("20%"),
+};
+
+// Per-class rows. maxLeverage and the ladder come from the data store tab: the asset-class
+// tabs leave maxLeverage blank for commodities and crypto, and list leverageLadderMaxNotional
+// as "?" everywhere.
+const baseMainnetFxOverrides: Partial<BaseMarketConfig> = {
+  positionFeeFactorForPositiveImpact: percentageToFloat("0.015%"),
+  positionFeeFactorForNegativeImpact: percentageToFloat("0.025%"),
+
+  maxLeverage: decimalToFloat(500),
+  leverageLadder: fxLeverageLadder,
+};
+
+const baseMainnetCommodityOverrides: Partial<BaseMarketConfig> = {
+  positionFeeFactorForPositiveImpact: percentageToFloat("0.02%"),
+  positionFeeFactorForNegativeImpact: percentageToFloat("0.03%"),
+
+  maxLeverage: decimalToFloat(200),
+  leverageLadder: goldLeverageLadder,
+};
+
+const baseMainnetCryptoOverrides: Partial<BaseMarketConfig> = {
+  positionFeeFactorForPositiveImpact: percentageToFloat("0.03%"),
+  positionFeeFactorForNegativeImpact: percentageToFloat("0.04%"),
+
+  maxLeverage: decimalToFloat(100),
+  leverageLadder: cryptoLeverageLadder,
+};
+
 const stablecoinSwapMarketConfig: Partial<SpotMarketConfig> = {
   swapOnly: true,
 
@@ -525,42 +610,62 @@ const config: {
   [network: string]: MarketConfig[];
 } = {
   base: [
-    // TODO: add more parameters for each mainnet market
+    // FX
     {
       tokens: { indexToken: "EUR", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetFxOverrides,
     },
     {
       tokens: { indexToken: "GBP", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
-    },
-    {
-      tokens: { indexToken: "GOLD", longToken: "USDC", shortToken: "USDC" },
-      reversed: false,
-    },
-    {
-      tokens: { indexToken: "XAG", longToken: "USDC", shortToken: "USDC" },
-      reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetFxOverrides,
     },
     {
       tokens: { indexToken: "JPY", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetFxOverrides,
+    },
+    // Commodities
+    {
+      tokens: { indexToken: "GOLD", longToken: "USDC", shortToken: "USDC" },
+      reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetCommodityOverrides,
+    },
+    {
+      tokens: { indexToken: "XAG", longToken: "USDC", shortToken: "USDC" },
+      reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetCommodityOverrides,
     },
     {
       tokens: { indexToken: "WTI", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetCommodityOverrides,
     },
+    // Crypto
     {
       tokens: { indexToken: "WBTC", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetCryptoOverrides,
     },
     {
       tokens: { indexToken: "WETH", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetCryptoOverrides,
     },
     {
       tokens: { indexToken: "TAO", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetCryptoOverrides,
     },
   ],
   baseSepolia: [
