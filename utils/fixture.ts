@@ -117,6 +117,7 @@ export async function deployFixture() {
   const increasePositionUtils = await hre.ethers.getContract("IncreasePositionUtils");
   const positionUtils = await hre.ethers.getContract("PositionUtils");
   const swapUtils = await hre.ethers.getContract("SwapUtils");
+  const subaccountUtils = await hre.ethers.getContract("SubaccountUtils");
   const referralStorage = await hre.ethers.getContract("ReferralStorage");
   const feeHandler = await hre.ethers.getContract("FeeHandler");
   const mockVaultV1 = await hre.ethers.getContract("MockVaultV1");
@@ -307,6 +308,7 @@ export async function deployFixture() {
       increasePositionUtils,
       positionUtils,
       swapUtils,
+      subaccountUtils,
       referralStorage,
       usdcPriceFeed,
       wethPriceFeed,

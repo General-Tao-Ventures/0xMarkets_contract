@@ -380,6 +380,15 @@ const baseMarketConfig: Partial<BaseMarketConfig> = {
   insuranceFundDrawdownTriggerFactor: percentageToFloat("2%"),
 };
 
+// Same-asset legs perform no swap, so no swap fee should be charged. The deploy script derives the
+// deposit and withdrawal fee factors from these two, so zeroing them is what removes the leakage.
+// Deliberately fee-only: spreading singleTokenMarketConfig would also replace the market's reserve
+// and PnL caps.
+const singleAssetFeeOverrides: Partial<BaseMarketConfig> = {
+  swapFeeFactorForPositiveImpact: bigNumberify(0),
+  swapFeeFactorForNegativeImpact: bigNumberify(0),
+};
+
 const singleTokenMarketConfig: Partial<BaseMarketConfig> = {
   reserveFactor: percentageToFloat("40%"),
   openInterestReserveFactor: percentageToFloat("35%"),
@@ -560,9 +569,7 @@ const config: {
       tokens: { indexToken: "EUR", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
-      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
-      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
-      ...singleTokenMarketConfig,
+      ...singleAssetFeeOverrides,
       ...fxMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -574,9 +581,7 @@ const config: {
       tokens: { indexToken: "GBP", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
-      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
-      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
-      ...singleTokenMarketConfig,
+      ...singleAssetFeeOverrides,
       ...fxMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -589,9 +594,7 @@ const config: {
       tokens: { indexToken: "GOLD", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
-      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
-      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
-      ...singleTokenMarketConfig,
+      ...singleAssetFeeOverrides,
       ...commodityMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -604,9 +607,7 @@ const config: {
       tokens: { indexToken: "XAG", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
-      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
-      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
-      ...singleTokenMarketConfig,
+      ...singleAssetFeeOverrides,
       ...commodityMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -619,9 +620,7 @@ const config: {
       tokens: { indexToken: "JPY", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
-      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
-      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
-      ...singleTokenMarketConfig,
+      ...singleAssetFeeOverrides,
       ...fxMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -634,9 +633,7 @@ const config: {
       tokens: { indexToken: "WTI", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
-      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
-      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
-      ...singleTokenMarketConfig,
+      ...singleAssetFeeOverrides,
       ...commodityMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -649,9 +646,7 @@ const config: {
       tokens: { indexToken: "WBTC", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
-      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
-      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
-      ...singleTokenMarketConfig,
+      ...singleAssetFeeOverrides,
       ...cryptoMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -663,9 +658,7 @@ const config: {
       tokens: { indexToken: "WETH", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
-      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
-      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
-      ...singleTokenMarketConfig,
+      ...singleAssetFeeOverrides,
       ...cryptoMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
@@ -678,9 +671,7 @@ const config: {
       tokens: { indexToken: "TAO", longToken: "USD0", shortToken: "USD0" },
       reversed: false,
       ...syntheticMarketConfig,
-      // both legs are the same token, so a deposit or withdrawal performs no swap and must not
-      // be charged a swap fee; the deploy script derives the deposit/withdrawal fee from these
-      ...singleTokenMarketConfig,
+      ...singleAssetFeeOverrides,
       ...cryptoMarketOverrides,
       maxLongTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
       maxShortTokenPoolAmount: expandDecimals(1_000_000_000, 6), // 1B USD0
