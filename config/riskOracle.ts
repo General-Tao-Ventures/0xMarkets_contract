@@ -1,3 +1,4 @@
+import { configNetworkName } from "../utils/network";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 export type RiskOracleConfig = {
@@ -23,8 +24,7 @@ export default async function (hre: HardhatRuntimeEnvironment): Promise<RiskOrac
     localhost: {},
   };
 
-  const riskOracleConfig: RiskOracleConfig =
-    config[hre.network.name === "baseSepoliaFork" ? "baseSepolia" : hre.network.name];
+  const riskOracleConfig: RiskOracleConfig = config[configNetworkName(hre.network.name)];
 
   if (riskOracleConfig.markets) {
     for (const [marketAddress, marketConfig] of Object.entries(riskOracleConfig.markets)) {

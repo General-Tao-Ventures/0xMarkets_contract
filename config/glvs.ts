@@ -1,3 +1,4 @@
+import { configNetworkName } from "../utils/network";
 import { BigNumberish } from "ethers";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
@@ -31,7 +32,7 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
     baseSepolia: [],
     hardhat: [],
     localhost: [],
-  }[network.name === "baseSepoliaFork" ? "baseSepolia" : network.name]!;
+  }[configNetworkName(network.name)]!;
 
   if (!config) {
     throw new Error(`Network config not defined for ${network.name}`);

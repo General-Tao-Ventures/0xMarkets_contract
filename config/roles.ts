@@ -1,3 +1,4 @@
+import { configNetworkName } from "../utils/network";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 export type RolesConfig = {
@@ -31,9 +32,7 @@ const requiredRolesForContracts = {
     "FeeHandler",
     "SwapHandler",
   ],
-  ROUTER_PLUGIN: [
-    "ExchangeRouter",
-  ],
+  ROUTER_PLUGIN: ["ExchangeRouter"],
   ROLE_ADMIN: ["Timelock"],
   CONFIG_KEEPER: ["ConfigSyncer"],
 };
@@ -65,6 +64,25 @@ export default async function (hre: HardhatRuntimeEnvironment): Promise<RolesCon
       ROUTER_PLUGIN: {},
       TIMELOCK_ADMIN: {},
       TIMELOCK_MULTISIG: {},
+    },
+    // Rehearsal of the mainnet deploy against a base fork. The real `base` entry names the
+    // mainnet role holders; here every role sits on the fork deployer so the run can proceed
+    // unattended.
+    baseFork: {
+      ADL_KEEPER: { [deployer]: true },
+      CONFIG_KEEPER: { [deployer]: true },
+      LIMITED_CONFIG_KEEPER: { [deployer]: true },
+      CONTROLLER: { [deployer]: true },
+      FEE_KEEPER: { [deployer]: true },
+      FROZEN_ORDER_KEEPER: { [deployer]: true },
+      GOV_TOKEN_CONTROLLER: { [deployer]: true },
+      LIQUIDATION_KEEPER: { [deployer]: true },
+      MARKET_KEEPER: { [deployer]: true },
+      ORDER_KEEPER: { [deployer]: true },
+      ROLE_ADMIN: { [deployer]: true },
+      ROUTER_PLUGIN: {},
+      TIMELOCK_ADMIN: { [deployer]: true },
+      TIMELOCK_MULTISIG: { [deployer]: true },
     },
     baseSepolia: {
       ADL_KEEPER: { [deployer]: true },
@@ -116,9 +134,11 @@ export default async function (hre: HardhatRuntimeEnvironment): Promise<RolesCon
     }
   }
 
-  const networkName = hre.network.name === "baseSepoliaFork" ? "baseSepolia" : hre.network.name;
+  // A fork with a role list of its own wins, so a rehearsal can hold the roles itself
+  // instead of the source chain's holders. Otherwise a fork reads its source chain.
+  const networkRoles = roles[hre.network.name] ?? roles[configNetworkName(hre.network.name)];
   return {
-    roles: roles[networkName],
+    roles: networkRoles,
     requiredRolesForContracts,
   };
 }

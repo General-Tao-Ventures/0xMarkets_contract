@@ -1,3 +1,4 @@
+import { configNetworkName } from "../utils/network";
 import { ethers } from "ethers";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { decimalToFloat, expandDecimals, percentageToFloat } from "../utils/math";
@@ -146,7 +147,7 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
     maxExecutionFeeMultiplierFactor: decimalToFloat(100),
   };
 
-  const networkConfig = {
+  const networkConfigs = {
     base: {
       estimatedGasFeeBaseAmount: false,
       estimatedGasPerOraclePrice: false,
@@ -183,7 +184,26 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
       insuranceFundAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       holdingAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
     },
-  }[network.name === "baseSepoliaFork" ? "baseSepolia" : network.name];
+    // Rehearsal of the mainnet deploy against a base fork. Everything except these addresses
+    // resolves through configNetworkName to the real `base` config; the addresses point at the
+    // fork deployer so the run doesn't need the mainnet ones to exist yet.
+    baseFork: {
+      estimatedGasFeeBaseAmount: false,
+      estimatedGasPerOraclePrice: false,
+      executionGasFeeBaseAmount: false,
+      executionGasPerOraclePrice: false,
+      veAlphaFeeReceiver: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      treasuryFeeReceiver: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      buybackFeeReceiver: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      validatorFeeReceiver: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      insuranceFundAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      holdingAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    },
+  };
+
+  // A fork with an entry of its own wins, so a rehearsal can supply addresses the real
+  // network config is still missing. Otherwise a fork falls through to its source chain.
+  const networkConfig = networkConfigs[network.name] ?? networkConfigs[configNetworkName(network.name)];
 
   if (!networkConfig) {
     throw new Error(`Network config not defined for ${network.name}`);
