@@ -550,6 +550,19 @@ library ExecuteDepositUtils {
             swapPath
         );
 
+        // Checkpoint each swap-path market before its pool amounts move. Borrowing accrues over the
+        // elapsed interval at a rate derived from current pool usage, so a swap that grows the pool
+        // first would let the whole stale interval be charged at the post-swap rate, undercollecting
+        // fees owed to that market's LPs. Only the destination market is checkpointed above.
+        for (uint256 i; i < swapPathMarkets.length; i++) {
+            PositionUtils.updateFundingAndBorrowingState(
+                params.dataStore,
+                params.eventEmitter,
+                swapPathMarkets[i],
+                MarketUtils.getMarketPrices(params.oracle, swapPathMarkets[i])
+            );
+        }
+
         (address outputToken, uint256 outputAmount) = SwapUtils.swap(
             SwapUtils.SwapParams(
                 params.dataStore, // dataStore
