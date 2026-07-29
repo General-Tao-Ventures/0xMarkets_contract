@@ -1,3 +1,4 @@
+import { configNetworkName } from "../utils/network";
 import { BigNumberish, ethers } from "ethers";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
@@ -642,12 +643,8 @@ const config: {
       ...baseMainnetMarketConfig,
       ...baseMainnetCommodityOverrides,
     },
-    {
-      tokens: { indexToken: "WTI", longToken: "USDC", shortToken: "USDC" },
-      reversed: false,
-      ...baseMainnetMarketConfig,
-      ...baseMainnetCommodityOverrides,
-    },
+    // WTI is deliberately absent: not listed yet and holds no liquidity. Its token config
+    // stays in place, so relisting is just adding the entry back here.
     // Crypto
     {
       tokens: { indexToken: "WBTC", longToken: "USDC", shortToken: "USDC" },
@@ -882,7 +879,7 @@ function fillLongShortValues(market, key, longKey, shortKey) {
 }
 
 export default async function (hre: HardhatRuntimeEnvironment) {
-  const markets = config[hre.network.name === "baseSepoliaFork" ? "baseSepolia" : hre.network.name];
+  const markets = config[configNetworkName(hre.network.name)];
   const tokens = await hre.gmx.getTokens();
   const defaultMarketConfig = hre.network.name === "hardhat" ? hardhatBaseMarketConfig : baseMarketConfig;
   if (markets) {
