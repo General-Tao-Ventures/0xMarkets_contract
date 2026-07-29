@@ -1,3 +1,4 @@
+import { configNetworkName } from "../utils/network";
 import prompts from "prompts";
 
 import fetch from "node-fetch";
@@ -783,7 +784,12 @@ export async function updateMarketConfig({
   includePositionImpact = false,
   includeMaxOpenInterest = false,
 }) {
-  if (!["arbitrumGoerli", "avalancheFuji", "baseSepolia", "hardhat", "localhost"].includes(hre.network.name)) {
+  // validateMarketConfigs compares each market against recommendedMarketConfig, which is an
+  // empty object here — the reference tables came from upstream and were not carried over. Any
+  // network not listed reaches `recommendedMarketConfig[network][...]` and throws on undefined,
+  // so the check cannot pass for any chain until those tables are filled in.
+  const skipValidation = ["arbitrumGoerli", "avalancheFuji", "base", "baseSepolia", "hardhat", "localhost"];
+  if (!skipValidation.includes(configNetworkName(hre.network.name))) {
     const { errors } = await validateMarketConfigs();
     if (errors.length !== 0) {
       throw new Error("Invalid market configs");

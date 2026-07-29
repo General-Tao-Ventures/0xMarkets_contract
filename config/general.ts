@@ -1,8 +1,10 @@
+import { configNetworkName } from "../utils/network";
 import { ethers } from "ethers";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { decimalToFloat, expandDecimals, percentageToFloat } from "../utils/math";
 
-export default async function ({ network }: HardhatRuntimeEnvironment) {
+export default async function (hre: HardhatRuntimeEnvironment) {
+  const { network } = hre;
   if (network.name === "hardhat") {
     // Note that this is only for the hardhat config, the config for all
     // other networks is separate from this
@@ -146,7 +148,11 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
     maxExecutionFeeMultiplierFactor: decimalToFloat(100),
   };
 
-  const networkConfig = {
+  // Only read for the fork rehearsal entry below; on every real network the addresses are
+  // configured explicitly.
+  const { deployer: forkDeployer } = await hre.getNamedAccounts();
+
+  const networkConfigs = {
     base: {
       estimatedGasFeeBaseAmount: false,
       estimatedGasPerOraclePrice: false,
@@ -183,7 +189,27 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
       insuranceFundAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       holdingAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
     },
-  }[network.name === "baseSepoliaFork" ? "baseSepolia" : network.name];
+    // Rehearsal of the mainnet deploy against a base fork. Everything except these addresses
+    // resolves through configNetworkName to the real `base` config. These point at whichever
+    // account the fork is configured to deploy from, so nothing is pinned to a specific key
+    // and the run doesn't need the mainnet addresses to exist yet.
+    baseFork: {
+      estimatedGasFeeBaseAmount: false,
+      estimatedGasPerOraclePrice: false,
+      executionGasFeeBaseAmount: false,
+      executionGasPerOraclePrice: false,
+      veAlphaFeeReceiver: forkDeployer,
+      treasuryFeeReceiver: forkDeployer,
+      buybackFeeReceiver: forkDeployer,
+      validatorFeeReceiver: forkDeployer,
+      insuranceFundAddress: forkDeployer,
+      holdingAddress: forkDeployer,
+    },
+  };
+
+  // A fork with an entry of its own wins, so a rehearsal can supply addresses the real
+  // network config is still missing. Otherwise a fork falls through to its source chain.
+  const networkConfig = networkConfigs[network.name] ?? networkConfigs[configNetworkName(network.name)];
 
   if (!networkConfig) {
     throw new Error(`Network config not defined for ${network.name}`);

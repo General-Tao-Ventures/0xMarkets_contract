@@ -1,3 +1,4 @@
+import { configNetworkName } from "../utils/network";
 export function getExistingContractAddresses(network) {
   const config: { [network: string]: any } = {
     base: {},
@@ -6,5 +7,5 @@ export function getExistingContractAddresses(network) {
     hardhat: {},
   };
 
-  return config[network.name === "baseSepoliaFork" ? "baseSepolia" : network.name];
+  return config[configNetworkName(network.name)];
 }

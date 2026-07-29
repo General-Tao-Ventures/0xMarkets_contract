@@ -1,3 +1,4 @@
+import { configNetworkName } from "../utils/network";
 import { BigNumberish, ethers } from "ethers";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
@@ -475,6 +476,110 @@ const cryptoMarketOverrides: Partial<BaseMarketConfig> = {
   leverageLadder: cryptoLeverageLadder,
 };
 
+// Base mainnet. Transcribed from the "New Values" column of the GMX Base Parameters sheet
+// (Params FX / Params Commodities / Params Crypto tabs, which agree on everything below).
+// Rows the sheet leaves blank — every funding parameter, the impact pool rate and minimum —
+// keep their baseMarketConfig value.
+//
+// Four of these disagree with values already in this file and are pending confirmation:
+// liquidationFeeFactor (sheet 100%, here 20%, and the config validator caps the key at 30%
+// so this reverts on deploy), the five maxPnlFactor rows (sheet 0, here 90/85/77/90/70),
+// the three max position impact factors (sheet 100%, here 0.5%/0.5%/0), and the two
+// position impact factors, which the sheet has the opposite way round to both this file
+// and the deployed chain.
+const baseMainnetMarketConfig: Partial<BaseMarketConfig> = {
+  ...baseMarketConfig,
+  ...singleAssetFeeOverrides,
+
+  reserveFactor: percentageToFloat("60%"),
+  openInterestReserveFactor: percentageToFloat("50%"),
+
+  minCollateralFactorForOpenInterestMultiplier: 0,
+
+  // Both legs are USDC, so each side is valued at half the raw pool and these caps bind per
+  // side. Halved so the raw pool totals the 1B the sheet asks for.
+  maxLongTokenPoolAmount: expandDecimals(500_000_000, 6),
+  maxShortTokenPoolAmount: expandDecimals(500_000_000, 6),
+  maxPoolUsdForDeposit: decimalToFloat(500_000_000),
+
+  maxOpenInterest: decimalToFloat(50_000_000),
+
+  // maxPnlFactor values differ per asset class, so they live in the per-class overrides below.
+
+  liquidationFeeFactor: decimalToFloat(1),
+
+  negativePositionImpactFactor: exponentToFloat("8e-8"),
+  positivePositionImpactFactor: exponentToFloat("6e-8"),
+  positionImpactExponentFactor: exponentToFloat("1.45e0"),
+
+  negativeMaxPositionImpactFactor: decimalToFloat(1),
+  positiveMaxPositionImpactFactor: decimalToFloat(1),
+  maxPositionImpactFactorForLiquidations: decimalToFloat(1),
+
+  minCollateralUsd: decimalToFloat(5, 0),
+
+  aboveOptimalUsageBorrowingFactor: 0,
+  baseBorrowingFactor: 0,
+  optimalUsageFactor: 0,
+  borrowingFactor: exponentToFloat("5.6e-10").div(SECONDS_PER_DAY),
+  borrowingExponentFactor: exponentToFloat("1.73e0"),
+
+  minLeverage: decimalToFloat(1),
+  minMmr: percentageToFloat("1%"),
+  maxMmr: percentageToFloat("20%"),
+  mmrTuning: percentageToFloat("20%"),
+};
+
+// Per-class rows. maxLeverage and the ladder come from the data store tab: the asset-class
+// tabs leave maxLeverage blank for commodities and crypto, and list leverageLadderMaxNotional
+// as "?" everywhere.
+const baseMainnetFxOverrides: Partial<BaseMarketConfig> = {
+  positionFeeFactorForPositiveImpact: percentageToFloat("0.015%"),
+  positionFeeFactorForNegativeImpact: percentageToFloat("0.025%"),
+
+  maxPnlFactorForTraders: percentageToFloat("90%"),
+  maxPnlFactorForAdl: percentageToFloat("60%"),
+  minPnlFactorAfterAdl: percentageToFloat("45%"),
+  maxPnlFactorForDeposits: percentageToFloat("90%"),
+  maxPnlFactorForWithdrawals: percentageToFloat("70%"),
+
+  // TODO: target is 100x, which needs the ladder to come down from its 200x first tier —
+  // setLeverageLadder rejects any tier above the market max. Left at the deployed value
+  // until the new tiers land.
+  maxLeverage: decimalToFloat(500),
+  leverageLadder: fxLeverageLadder,
+};
+
+const baseMainnetCommodityOverrides: Partial<BaseMarketConfig> = {
+  positionFeeFactorForPositiveImpact: percentageToFloat("0.02%"),
+  positionFeeFactorForNegativeImpact: percentageToFloat("0.03%"),
+
+  maxPnlFactorForTraders: percentageToFloat("85%"),
+  maxPnlFactorForAdl: percentageToFloat("55%"),
+  minPnlFactorAfterAdl: percentageToFloat("40%"),
+  maxPnlFactorForDeposits: percentageToFloat("85%"),
+  maxPnlFactorForWithdrawals: percentageToFloat("70%"),
+
+  // TODO: target is 50x, blocked on new tiers the same way — the ladder starts at 100x.
+  maxLeverage: decimalToFloat(200),
+  leverageLadder: goldLeverageLadder,
+};
+
+const baseMainnetCryptoOverrides: Partial<BaseMarketConfig> = {
+  positionFeeFactorForPositiveImpact: percentageToFloat("0.03%"),
+  positionFeeFactorForNegativeImpact: percentageToFloat("0.04%"),
+
+  maxPnlFactorForTraders: percentageToFloat("70%"),
+  maxPnlFactorForAdl: percentageToFloat("45%"),
+  minPnlFactorAfterAdl: percentageToFloat("35%"),
+  maxPnlFactorForDeposits: percentageToFloat("70%"),
+  maxPnlFactorForWithdrawals: percentageToFloat("60%"),
+
+  // Its ladder already tops out at 50x, so the market max can match it now.
+  maxLeverage: decimalToFloat(50),
+  leverageLadder: cryptoLeverageLadder,
+};
+
 const stablecoinSwapMarketConfig: Partial<SpotMarketConfig> = {
   swapOnly: true,
 
@@ -525,42 +630,58 @@ const config: {
   [network: string]: MarketConfig[];
 } = {
   base: [
-    // TODO: add more parameters for each mainnet market
+    // FX
     {
       tokens: { indexToken: "EUR", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetFxOverrides,
     },
     {
       tokens: { indexToken: "GBP", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
-    },
-    {
-      tokens: { indexToken: "GOLD", longToken: "USDC", shortToken: "USDC" },
-      reversed: false,
-    },
-    {
-      tokens: { indexToken: "XAG", longToken: "USDC", shortToken: "USDC" },
-      reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetFxOverrides,
     },
     {
       tokens: { indexToken: "JPY", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetFxOverrides,
+    },
+    // Commodities
+    {
+      tokens: { indexToken: "GOLD", longToken: "USDC", shortToken: "USDC" },
+      reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetCommodityOverrides,
     },
     {
-      tokens: { indexToken: "WTI", longToken: "USDC", shortToken: "USDC" },
+      tokens: { indexToken: "XAG", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetCommodityOverrides,
     },
+    // WTI is deliberately absent: not listed yet and holds no liquidity. Its token config
+    // stays in place, so relisting is just adding the entry back here.
+    // Crypto
     {
       tokens: { indexToken: "WBTC", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetCryptoOverrides,
     },
     {
       tokens: { indexToken: "WETH", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetCryptoOverrides,
     },
     {
       tokens: { indexToken: "TAO", longToken: "USDC", shortToken: "USDC" },
       reversed: false,
+      ...baseMainnetMarketConfig,
+      ...baseMainnetCryptoOverrides,
     },
   ],
   baseSepolia: [
@@ -795,7 +916,7 @@ function fillLongShortValues(market, key, longKey, shortKey) {
 }
 
 export default async function (hre: HardhatRuntimeEnvironment) {
-  const markets = config[hre.network.name === "baseSepoliaFork" ? "baseSepolia" : hre.network.name];
+  const markets = config[configNetworkName(hre.network.name)];
   const tokens = await hre.gmx.getTokens();
   const defaultMarketConfig = hre.network.name === "hardhat" ? hardhatBaseMarketConfig : baseMarketConfig;
   if (markets) {

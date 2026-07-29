@@ -1,3 +1,4 @@
+import { configNetworkName } from "../utils/network";
 import { ethers } from "ethers";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
@@ -22,8 +23,7 @@ export default async function (hre: HardhatRuntimeEnvironment): Promise<VaultV1C
     },
   };
 
-  const vaultV1Config: VaultV1Config =
-    config[hre.network.name === "baseSepoliaFork" ? "baseSepolia" : hre.network.name];
+  const vaultV1Config: VaultV1Config = config[configNetworkName(hre.network.name)];
 
   return vaultV1Config;
 }

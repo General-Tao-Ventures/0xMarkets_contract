@@ -1,3 +1,4 @@
+import { configNetworkName } from "../utils/network";
 import { BigNumberish } from "ethers";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { percentageToFloat } from "../utils/math";
@@ -45,8 +46,7 @@ export default async function (hre: HardhatRuntimeEnvironment): Promise<BuybackC
     localhost: defaultEmptyConfig,
   };
 
-  const networkConfig: BuybackConfig =
-    config[hre.network.name === "baseSepoliaFork" ? "baseSepolia" : hre.network.name];
+  const networkConfig: BuybackConfig = config[configNetworkName(hre.network.name)];
 
   return networkConfig;
 }

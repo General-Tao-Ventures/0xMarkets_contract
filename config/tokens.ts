@@ -1,3 +1,4 @@
+import { configNetworkName } from "../utils/network";
 import { BigNumberish, ethers } from "ethers";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import * as keys from "../utils/keys";
@@ -353,7 +354,7 @@ async function getAssetAddress(hre, key: string) {
 }
 
 export default async function (hre: HardhatRuntimeEnvironment): Promise<TokensConfig> {
-  const tokens = config[hre.network.name === "baseSepoliaFork" ? "baseSepolia" : hre.network.name];
+  const tokens = config[configNetworkName(hre.network.name)];
 
   for (const [tokenSymbol, token] of Object.entries(tokens as TokensConfig)) {
     (token as any).symbol = tokenSymbol;

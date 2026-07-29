@@ -126,9 +126,11 @@ library ConfigValidatorUtils {
             }
         }
 
-        // fat-finger ceiling on the liquidation fee; the intended value is 20%, cap at 30%
+        // The liquidation fee is charged on the collateral remaining at liquidation, not on
+        // position size, so 100% is a coherent setting: the liquidated position keeps nothing.
+        // Bound it there — above 100% the fee would exceed the collateral it is taken from.
         if (baseKey == Keys.LIQUIDATION_FEE_FACTOR) {
-            if (value > (30 * Precision.FLOAT_PRECISION) / 100) {
+            if (value > Precision.FLOAT_PRECISION) {
                 revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
             }
         }
