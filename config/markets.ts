@@ -491,8 +491,8 @@ const baseMainnetMarketConfig: Partial<BaseMarketConfig> = {
   ...baseMarketConfig,
   ...singleAssetFeeOverrides,
 
-  reserveFactor: percentageToFloat("95%"),
-  openInterestReserveFactor: percentageToFloat("60%"),
+  reserveFactor: percentageToFloat("60%"),
+  openInterestReserveFactor: percentageToFloat("50%"),
 
   minCollateralFactorForOpenInterestMultiplier: 0,
 
@@ -504,16 +504,12 @@ const baseMainnetMarketConfig: Partial<BaseMarketConfig> = {
 
   maxOpenInterest: decimalToFloat(50_000_000),
 
-  maxPnlFactorForTraders: bigNumberify(0),
-  maxPnlFactorForAdl: bigNumberify(0),
-  minPnlFactorAfterAdl: bigNumberify(0),
-  maxPnlFactorForDeposits: bigNumberify(0),
-  maxPnlFactorForWithdrawals: bigNumberify(0),
+  // maxPnlFactor values differ per asset class, so they live in the per-class overrides below.
 
   liquidationFeeFactor: decimalToFloat(1),
 
   negativePositionImpactFactor: exponentToFloat("8e-8"),
-  positivePositionImpactFactor: exponentToFloat("1e-7"),
+  positivePositionImpactFactor: exponentToFloat("6e-8"),
   positionImpactExponentFactor: exponentToFloat("1.45e0"),
 
   negativeMaxPositionImpactFactor: decimalToFloat(1),
@@ -541,6 +537,15 @@ const baseMainnetFxOverrides: Partial<BaseMarketConfig> = {
   positionFeeFactorForPositiveImpact: percentageToFloat("0.015%"),
   positionFeeFactorForNegativeImpact: percentageToFloat("0.025%"),
 
+  maxPnlFactorForTraders: percentageToFloat("90%"),
+  maxPnlFactorForAdl: percentageToFloat("60%"),
+  minPnlFactorAfterAdl: percentageToFloat("45%"),
+  maxPnlFactorForDeposits: percentageToFloat("90%"),
+  maxPnlFactorForWithdrawals: percentageToFloat("70%"),
+
+  // TODO: target is 100x, which needs the ladder to come down from its 200x first tier —
+  // setLeverageLadder rejects any tier above the market max. Left at the deployed value
+  // until the new tiers land.
   maxLeverage: decimalToFloat(500),
   leverageLadder: fxLeverageLadder,
 };
@@ -549,6 +554,13 @@ const baseMainnetCommodityOverrides: Partial<BaseMarketConfig> = {
   positionFeeFactorForPositiveImpact: percentageToFloat("0.02%"),
   positionFeeFactorForNegativeImpact: percentageToFloat("0.03%"),
 
+  maxPnlFactorForTraders: percentageToFloat("85%"),
+  maxPnlFactorForAdl: percentageToFloat("55%"),
+  minPnlFactorAfterAdl: percentageToFloat("40%"),
+  maxPnlFactorForDeposits: percentageToFloat("85%"),
+  maxPnlFactorForWithdrawals: percentageToFloat("70%"),
+
+  // TODO: target is 50x, blocked on new tiers the same way — the ladder starts at 100x.
   maxLeverage: decimalToFloat(200),
   leverageLadder: goldLeverageLadder,
 };
@@ -557,7 +569,14 @@ const baseMainnetCryptoOverrides: Partial<BaseMarketConfig> = {
   positionFeeFactorForPositiveImpact: percentageToFloat("0.03%"),
   positionFeeFactorForNegativeImpact: percentageToFloat("0.04%"),
 
-  maxLeverage: decimalToFloat(100),
+  maxPnlFactorForTraders: percentageToFloat("70%"),
+  maxPnlFactorForAdl: percentageToFloat("45%"),
+  minPnlFactorAfterAdl: percentageToFloat("35%"),
+  maxPnlFactorForDeposits: percentageToFloat("70%"),
+  maxPnlFactorForWithdrawals: percentageToFloat("60%"),
+
+  // Its ladder already tops out at 50x, so the market max can match it now.
+  maxLeverage: decimalToFloat(50),
   leverageLadder: cryptoLeverageLadder,
 };
 
