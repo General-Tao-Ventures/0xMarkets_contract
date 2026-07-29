@@ -326,6 +326,31 @@ describe("SubaccountGelatoRelayRouter", () => {
       );
     });
 
+    it("MaxRelayFeeSwapForSubaccountExceeded", async () => {
+      // a subaccount is authorised by action count, not amount, so an oversized fee swap would burn
+      // the main account's balance through the atomic swap fee
+      await enableSubaccount();
+      await wnt.connect(user1).approve(router.address, expandDecimals(100, 18));
+      await dataStore.setUint(keys.MAX_RELAY_FEE_SWAP_USD_FOR_SUBACCOUNT, decimalToFloat(100));
+      createOrderParams.feeParams.feeAmount = expandDecimals(1, 18); // 1 WETH, well above the 100 USD cap
+      createOrderParams.feeParams.feeSwapPath = [ethUsdMarket.marketToken];
+      createOrderParams.oracleParams = {
+        tokens: [usdc.address, wnt.address],
+        providers: [chainlinkPriceFeedProvider.address, chainlinkPriceFeedProvider.address],
+        data: ["0x", "0x"],
+      };
+      await handleDeposit(fixture, {
+        create: {
+          longTokenAmount: expandDecimals(10, 18),
+          shortTokenAmount: expandDecimals(10 * 5000, 6),
+        },
+      });
+      await expect(sendCreateOrder(createOrderParams)).to.be.revertedWithCustomError(
+        errorsContract,
+        "MaxRelayFeeSwapForSubaccountExceeded"
+      );
+    });
+
     it("SubaccountApprovalDeadlinePassed", async () => {
       await wnt.connect(user1).approve(router.address, expandDecimals(1, 18));
 

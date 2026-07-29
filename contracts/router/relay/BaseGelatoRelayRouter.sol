@@ -17,6 +17,7 @@ import "../../order/IBaseOrderUtils.sol";
 import "../../order/OrderStoreUtils.sol";
 import "../../order/OrderVault.sol";
 import "../../router/Router.sol";
+import "../../subaccount/SubaccountUtils.sol";
 import "../../swap/SwapUtils.sol";
 import "../../token/TokenUtils.sol";
 
@@ -269,7 +270,7 @@ abstract contract BaseGelatoRelayRouter is GelatoRelayContext, ReentrancyGuard, 
         }
 
         _handleTokenPermits(relayParams.tokenPermits);
-        return _handleRelayFee(contracts, relayParams, account, residualFeeReceiver);
+        return _handleRelayFee(contracts, relayParams, account, residualFeeReceiver, isSubaccount);
     }
 
     function _handleTokenPermits(TokenPermit[] calldata tokenPermits) internal {
@@ -307,7 +308,8 @@ abstract contract BaseGelatoRelayRouter is GelatoRelayContext, ReentrancyGuard, 
         Contracts memory contracts,
         RelayParams calldata relayParams,
         address account,
-        address residualFeeReceiver
+        address residualFeeReceiver,
+        bool isSubaccount
     ) internal returns (uint256) {
         address wnt = TokenUtils.wnt(contracts.dataStore);
 
@@ -330,6 +332,13 @@ abstract contract BaseGelatoRelayRouter is GelatoRelayContext, ReentrancyGuard, 
             );
             outputAmount = ERC20(_getFeeToken()).balanceOf(address(this)) - feeTokenBalanceBefore;
         } else if (relayParams.fee.feeSwapPath.length != 0) {
+            // a subaccount is authorised by action count, never by amount, so an uncapped fee swap
+            // lets it burn the main account's balance through the atomic swap fee
+            if (isSubaccount) {
+                SubaccountUtils.validateRelayFeeSwap(
+                    contracts.dataStore, oracle, relayParams.fee.feeToken, relayParams.fee.feeAmount
+                );
+            }
             _sendTokens(account, relayParams.fee.feeToken, address(contracts.orderVault), relayParams.fee.feeAmount);
             outputAmount = _swapFeeTokens(contracts, wnt, relayParams.fee);
         } else if (relayParams.fee.feeToken == wnt) {

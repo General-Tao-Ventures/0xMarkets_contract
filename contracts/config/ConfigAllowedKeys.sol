@@ -132,6 +132,7 @@ library ConfigAllowedKeys {
         allowedBaseKeys[Keys.MMR_TUNING] = true;
         allowedBaseKeys[Keys.MIN_COLLATERAL_FACTOR_FOR_OPEN_INTEREST_MULTIPLIER] = true;
         allowedBaseKeys[Keys.MIN_COLLATERAL_USD] = true;
+        allowedBaseKeys[Keys.MAX_RELAY_FEE_SWAP_USD_FOR_SUBACCOUNT] = true;
         allowedBaseKeys[Keys.CLAIMABLE_COLLATERAL_DELAY] = true;
 
         allowedBaseKeys[Keys.VIRTUAL_TOKEN_ID] = true;

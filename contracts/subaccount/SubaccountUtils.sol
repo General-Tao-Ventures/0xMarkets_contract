@@ -6,6 +6,8 @@ import "../data/Keys.sol";
 import "../data/DataStore.sol";
 import "../event/EventEmitter.sol";
 import "../utils/Cast.sol";
+import "../oracle/Oracle.sol";
+import "../error/Errors.sol";
 
 library SubaccountUtils {
     using EventUtils for EventUtils.AddressItems;
@@ -225,5 +227,19 @@ library SubaccountUtils {
             Cast.toBytes32(subaccount),
             eventData
         );
+    }
+
+    // a subaccount is authorised by action count, never by amount, so an uncapped relay fee swap
+    // lets it burn the main account's balance through the atomic swap fee
+    function validateRelayFeeSwap(
+        DataStore dataStore,
+        Oracle oracle,
+        address feeToken,
+        uint256 feeAmount
+    ) external view {
+        uint256 relayFeeSwapUsd = feeAmount * oracle.getPrimaryPrice(feeToken).max;
+        if (relayFeeSwapUsd > dataStore.getUint(Keys.MAX_RELAY_FEE_SWAP_USD_FOR_SUBACCOUNT)) {
+            revert Errors.MaxRelayFeeSwapForSubaccountExceeded(relayFeeSwapUsd);
+        }
     }
 }

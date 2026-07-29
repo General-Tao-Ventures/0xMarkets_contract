@@ -76,6 +76,7 @@ export async function deployFixture() {
   const insuranceFundEventUtils = await hre.ethers.getContract("InsuranceFundEventUtils");
   const insuranceFundUtils = await hre.ethers.getContract("InsuranceFundUtils");
   const settlementHandler = await hre.ethers.getContract("SettlementHandler");
+  const insuranceFundHandler = await hre.ethers.getContract("InsuranceFundHandler");
   const glvVault = await hre.ethers.getContract("GlvVault");
   const marketFactory = await hre.ethers.getContract("MarketFactory");
   const glvFactory = await hre.ethers.getContract("GlvFactory");
@@ -116,6 +117,7 @@ export async function deployFixture() {
   const increasePositionUtils = await hre.ethers.getContract("IncreasePositionUtils");
   const positionUtils = await hre.ethers.getContract("PositionUtils");
   const swapUtils = await hre.ethers.getContract("SwapUtils");
+  const subaccountUtils = await hre.ethers.getContract("SubaccountUtils");
   const referralStorage = await hre.ethers.getContract("ReferralStorage");
   const feeHandler = await hre.ethers.getContract("FeeHandler");
   const mockVaultV1 = await hre.ethers.getContract("MockVaultV1");
@@ -273,6 +275,7 @@ export async function deployFixture() {
       insuranceFundEventUtils,
       insuranceFundUtils,
       settlementHandler,
+      insuranceFundHandler,
       marketFactory,
       depositHandler,
       depositUtils,
@@ -305,6 +308,7 @@ export async function deployFixture() {
       increasePositionUtils,
       positionUtils,
       swapUtils,
+      subaccountUtils,
       referralStorage,
       usdcPriceFeed,
       wethPriceFeed,

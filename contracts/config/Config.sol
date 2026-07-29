@@ -299,7 +299,7 @@ contract Config is ReentrancyGuard, RoleModule, BasicMulticall {
         uint256 baselineSwapPerDay,
         bool longsPayShorts,
         bool reversed
-    ) internal onlyConfigKeeper nonReentrant {
+    ) internal {
         dataStore.setBool(Keys.baselineSwapLongsPayShortsKey(market), reversed ? !longsPayShorts : longsPayShorts);
         dataStore.setUint(Keys.baselineSwapPerDayKey(market), baselineSwapPerDay);
 

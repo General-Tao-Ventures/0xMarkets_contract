@@ -24,6 +24,7 @@ library Errors {
 
     // CallbackUtils errors
     error MaxCallbackGasLimitExceeded(uint256 callbackGasLimit, uint256 maxCallbackGasLimit);
+    error MaxRelayFeeSwapForSubaccountExceeded(uint256 relayFeeSwapUsd);
     error InsufficientGasLeftForCallback(uint256 gasToBeForwarded, uint256 callbackGasLimit);
 
     // Config errors
@@ -392,6 +393,7 @@ library Errors {
 
     // InsuranceFund errors
     error InsuranceFundEpochNotYetElapsed(uint256 currentTime, uint256 epochStart, uint256 epochLength);
+    error EmptyInsuranceFundAddress();
 
     // Array errors
     error CompactedArrayOutOfBounds(
