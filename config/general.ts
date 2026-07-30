@@ -134,8 +134,13 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     positionFeeVeAlphaFactor: 0,
     positionFeeTreasuryFactor: 0,
     positionFeeBuybackFactor: 0,
+    // The liquidation fee splits three ways: validator, insurance, and the remainder to the
+    // pool. Only insurance routes into the InsuranceVault and credits the per (market, token)
+    // reserve that attemptInjectPool draws on — the validator share is recorded as a claimable
+    // balance for VALIDATOR_FEE_RECEIVER and is not transferred anywhere, so it cannot be used
+    // to reach the fund. 70% therefore goes on this key alone; the residual 30% stays with LPs.
     liquidationFeeValidatorFactor: 0,
-    liquidationFeeInsuranceFactor: 0,
+    liquidationFeeInsuranceFactor: percentageToFloat("70%"),
 
     // Insurance fund epoch lifecycle (seconds). See deploy/configureGeneralSettings.ts.
     insuranceFundEpochLength: 7 * 24 * 60 * 60, // 7 days

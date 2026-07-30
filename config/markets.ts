@@ -35,14 +35,25 @@ const cryptoLeverageLadder = [
   { maxNotionalUsd: ethers.constants.MaxUint256, maxLeverage: decimalToFloat(3) },
 ];
 
-// Base mainnet ladders. The headline max is 100x FX, 50x commodities, 50x crypto, and the
-// market max has to equal tier 0 or Config.setLeverageLadder reverts on any tier above it.
-// These are the existing ladders with the tiers above the new max removed — no new numbers,
-// and every position size gets the same leverage as before or less. Crypto already topped
-// out at 50x, so it is unchanged and keeps its own ladder.
-const baseMainnetFxLadder = fxLeverageLadder.filter((t) => t.maxLeverage.lte(decimalToFloat(100)));
+// Base mainnet ladders, per the leverage matrix. Tier 0 equals the market's max leverage in
+// each case — Config.setLeverageLadder rejects any tier above the market max.
+const baseMainnetFxLadder = [
+  { maxNotionalUsd: expandDecimals(50_000, 30), maxLeverage: decimalToFloat(100) },
+  { maxNotionalUsd: expandDecimals(200_000, 30), maxLeverage: decimalToFloat(50) },
+  { maxNotionalUsd: expandDecimals(500_000, 30), maxLeverage: decimalToFloat(25) },
+  { maxNotionalUsd: expandDecimals(1_000_000, 30), maxLeverage: decimalToFloat(10) },
+  { maxNotionalUsd: expandDecimals(2_500_000, 30), maxLeverage: decimalToFloat(5) },
+  { maxNotionalUsd: ethers.constants.MaxUint256, maxLeverage: decimalToFloat(2) },
+];
 
-const baseMainnetCommodityLadder = goldLeverageLadder.filter((t) => t.maxLeverage.lte(decimalToFloat(50)));
+const baseMainnetCommodityLadder = [
+  { maxNotionalUsd: expandDecimals(50_000, 30), maxLeverage: decimalToFloat(50) },
+  { maxNotionalUsd: expandDecimals(200_000, 30), maxLeverage: decimalToFloat(25) },
+  { maxNotionalUsd: expandDecimals(500_000, 30), maxLeverage: decimalToFloat(20) },
+  { maxNotionalUsd: expandDecimals(1_000_000, 30), maxLeverage: decimalToFloat(10) },
+  { maxNotionalUsd: expandDecimals(2_500_000, 30), maxLeverage: decimalToFloat(5) },
+  { maxNotionalUsd: ethers.constants.MaxUint256, maxLeverage: decimalToFloat(2) },
+];
 
 export type BaseMarketConfig = {
   reserveFactor: BigNumberish;
