@@ -89,6 +89,7 @@ library ConfigAllowedKeys {
         allowedBaseKeys[Keys.POSITION_FEE_BUYBACK_FACTOR] = true;
         allowedBaseKeys[Keys.LIQUIDATION_FEE_VALIDATOR_FACTOR] = true;
         allowedBaseKeys[Keys.LIQUIDATION_FEE_INSURANCE_FACTOR] = true;
+        allowedBaseKeys[Keys.LIQUIDATION_FEE_BUYBACK_FACTOR] = true;
 
         // Insurance fund — governance-tunable parameters.
         // INSURANCE_FUND_ADDRESS and LIQUIDATION_FEE_INSURANCE_FACTOR are registered

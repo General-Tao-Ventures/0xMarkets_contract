@@ -346,8 +346,18 @@ library PositionPricingUtils {
             borrowingFeeUsd
         );
 
+        // Buyback share of the liquidation fee. Deliberately not a PositionLiquidationFees
+        // field: both buyback shares are claimed by BUYBACK_FEE_RECEIVER so one balance serves
+        // both, and widening that struct pushes DecreasePositionCollateralUtils past the
+        // 24,576-byte limit. Computed inside the liquidation branch so the non-liquidation
+        // path does not pay for a storage read that would always multiply by zero.
+        uint256 liquidationFeeAmountForBuyback;
         if (params.isLiquidation) {
             fees.liquidation = getLiquidationFees(params.dataStore, params.position.market(), params.remainingCollateralUsd, params.collateralTokenPrice);
+            liquidationFeeAmountForBuyback = Precision.applyFactor(
+                fees.liquidation.liquidationFeeAmount,
+                params.dataStore.getUint(Keys.LIQUIDATION_FEE_BUYBACK_FACTOR)
+            );
         }
 
         fees.feeAmountForPool =
@@ -355,10 +365,12 @@ library PositionPricingUtils {
             fees.borrowing.borrowingFeeAmount +
             fees.liquidation.liquidationFeeAmount -
             fees.liquidation.liquidationFeeAmountForValidator -
-            fees.liquidation.liquidationFeeAmountForInsurance;
+            fees.liquidation.liquidationFeeAmountForInsurance -
+            liquidationFeeAmountForBuyback;
 
         fees.validatorFeeAmount = fees.liquidation.liquidationFeeAmountForValidator;
         fees.insuranceFeeAmount = fees.liquidation.liquidationFeeAmountForInsurance;
+        fees.buybackFeeAmount += liquidationFeeAmountForBuyback;
 
         fees.funding.latestFundingFeeAmountPerSize = MarketUtils.getFundingFeeAmountPerSize(
             params.dataStore,

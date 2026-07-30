@@ -220,6 +220,8 @@ library Keys {
     bytes32 public constant LIQUIDATION_FEE_VALIDATOR_FACTOR = keccak256(abi.encode("LIQUIDATION_FEE_VALIDATOR_FACTOR"));
     // @dev key for the share of liquidation fees routed to the insurance fund
     bytes32 public constant LIQUIDATION_FEE_INSURANCE_FACTOR = keccak256(abi.encode("LIQUIDATION_FEE_INSURANCE_FACTOR"));
+    // @dev key for the share of liquidation fees routed to buyback
+    bytes32 public constant LIQUIDATION_FEE_BUYBACK_FACTOR = keccak256(abi.encode("LIQUIDATION_FEE_BUYBACK_FACTOR"));
 
     // @dev per-market realized-drawdown threshold; InsuranceFundUtils.attemptInjectPool
     // moves reserves back into the pool when drawdown crosses this.
