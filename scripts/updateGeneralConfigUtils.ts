@@ -147,6 +147,15 @@ const processGeneralConfig = async ({ generalConfig, oracleConfig, handleConfig 
       `liquidationFeeInsuranceFactor`
     );
   }
+  if (generalConfig.liquidationFeeBuybackFactor !== undefined) {
+    await handleConfig(
+      "uint",
+      keys.LIQUIDATION_FEE_BUYBACK_FACTOR,
+      "0x",
+      generalConfig.liquidationFeeBuybackFactor,
+      `liquidationFeeBuybackFactor`
+    );
+  }
 
   await handleConfig("uint", keys.DEPOSIT_GAS_LIMIT, "0x", generalConfig.depositGasLimit, `depositGasLimit`);
 

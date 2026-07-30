@@ -213,6 +213,7 @@ library ConfigValidatorUtils {
             baseKey == Keys.POSITION_FEE_BUYBACK_FACTOR ||
             baseKey == Keys.LIQUIDATION_FEE_VALIDATOR_FACTOR ||
             baseKey == Keys.LIQUIDATION_FEE_INSURANCE_FACTOR ||
+            baseKey == Keys.LIQUIDATION_FEE_BUYBACK_FACTOR ||
             baseKey == Keys.MAX_PNL_FACTOR ||
             baseKey == Keys.MIN_PNL_FACTOR_AFTER_ADL ||
             baseKey == Keys.OPTIMAL_USAGE_FACTOR ||
@@ -245,13 +246,20 @@ library ConfigValidatorUtils {
         // ambiguity).
         if (
             baseKey == Keys.LIQUIDATION_FEE_VALIDATOR_FACTOR ||
-            baseKey == Keys.LIQUIDATION_FEE_INSURANCE_FACTOR
+            baseKey == Keys.LIQUIDATION_FEE_INSURANCE_FACTOR ||
+            baseKey == Keys.LIQUIDATION_FEE_BUYBACK_FACTOR
         ) {
-            bytes32 otherKey = baseKey == Keys.LIQUIDATION_FEE_VALIDATOR_FACTOR
-                ? Keys.LIQUIDATION_FEE_INSURANCE_FACTOR
-                : Keys.LIQUIDATION_FEE_VALIDATOR_FACTOR;
-            uint256 otherValue = dataStore.getUint(otherKey);
-            if (value + otherValue > Precision.FLOAT_PRECISION) {
+            uint256 total = value;
+            if (baseKey != Keys.LIQUIDATION_FEE_VALIDATOR_FACTOR) {
+                total += dataStore.getUint(Keys.LIQUIDATION_FEE_VALIDATOR_FACTOR);
+            }
+            if (baseKey != Keys.LIQUIDATION_FEE_INSURANCE_FACTOR) {
+                total += dataStore.getUint(Keys.LIQUIDATION_FEE_INSURANCE_FACTOR);
+            }
+            if (baseKey != Keys.LIQUIDATION_FEE_BUYBACK_FACTOR) {
+                total += dataStore.getUint(Keys.LIQUIDATION_FEE_BUYBACK_FACTOR);
+            }
+            if (total > Precision.FLOAT_PRECISION) {
                 revert Errors.ConfigValueExceedsAllowedRange(baseKey, value);
             }
         }
