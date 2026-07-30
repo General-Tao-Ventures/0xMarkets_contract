@@ -35,6 +35,15 @@ const cryptoLeverageLadder = [
   { maxNotionalUsd: ethers.constants.MaxUint256, maxLeverage: decimalToFloat(3) },
 ];
 
+// Base mainnet ladders. The headline max is 100x FX, 50x commodities, 50x crypto, and the
+// market max has to equal tier 0 or Config.setLeverageLadder reverts on any tier above it.
+// These are the existing ladders with the tiers above the new max removed — no new numbers,
+// and every position size gets the same leverage as before or less. Crypto already topped
+// out at 50x, so it is unchanged and keeps its own ladder.
+const baseMainnetFxLadder = fxLeverageLadder.filter((t) => t.maxLeverage.lte(decimalToFloat(100)));
+
+const baseMainnetCommodityLadder = goldLeverageLadder.filter((t) => t.maxLeverage.lte(decimalToFloat(50)));
+
 export type BaseMarketConfig = {
   reserveFactor: BigNumberish;
   reserveFactorLongs?: BigNumberish;
@@ -543,11 +552,8 @@ const baseMainnetFxOverrides: Partial<BaseMarketConfig> = {
   maxPnlFactorForDeposits: percentageToFloat("90%"),
   maxPnlFactorForWithdrawals: percentageToFloat("70%"),
 
-  // TODO: target is 100x, which needs the ladder to come down from its 200x first tier —
-  // setLeverageLadder rejects any tier above the market max. Left at the deployed value
-  // until the new tiers land.
-  maxLeverage: decimalToFloat(500),
-  leverageLadder: fxLeverageLadder,
+  maxLeverage: decimalToFloat(100),
+  leverageLadder: baseMainnetFxLadder,
 };
 
 const baseMainnetCommodityOverrides: Partial<BaseMarketConfig> = {
@@ -560,9 +566,8 @@ const baseMainnetCommodityOverrides: Partial<BaseMarketConfig> = {
   maxPnlFactorForDeposits: percentageToFloat("85%"),
   maxPnlFactorForWithdrawals: percentageToFloat("70%"),
 
-  // TODO: target is 50x, blocked on new tiers the same way — the ladder starts at 100x.
-  maxLeverage: decimalToFloat(200),
-  leverageLadder: goldLeverageLadder,
+  maxLeverage: decimalToFloat(50),
+  leverageLadder: baseMainnetCommodityLadder,
 };
 
 const baseMainnetCryptoOverrides: Partial<BaseMarketConfig> = {
