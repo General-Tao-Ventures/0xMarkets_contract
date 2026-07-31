@@ -226,6 +226,8 @@ const config: HardhatUserConfig = {
       accounts: getEnvAccounts(),
       gas: "auto",
       gasMultiplier: 1.2,
+      // Long deploy (~98 contracts); dRPC/load balancers can hit default headers timeouts.
+      timeout: 600_000,
       verify: {
         etherscan: {
           apiUrl: getExplorerUrl("base"),
