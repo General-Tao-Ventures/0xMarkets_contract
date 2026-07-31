@@ -13,7 +13,6 @@ export default async function (hre: HardhatRuntimeEnvironment) {
       treasuryFeeReceiver: ethers.constants.AddressZero,
       buybackFeeReceiver: ethers.constants.AddressZero,
       validatorFeeReceiver: ethers.constants.AddressZero,
-      insuranceFundAddress: ethers.constants.AddressZero,
       holdingAddress: ethers.constants.AddressZero,
       sequencerUptimeFeed: ethers.constants.AddressZero,
       sequencerGraceDuration: 300,
@@ -170,7 +169,6 @@ export default async function (hre: HardhatRuntimeEnvironment) {
       treasuryFeeReceiver: "REPLACE_ME",
       buybackFeeReceiver: "REPLACE_ME",
       validatorFeeReceiver: "REPLACE_ME",
-      insuranceFundAddress: "REPLACE_ME",
       holdingAddress: "REPLACE_ME",
     },
     baseSepolia: {
@@ -182,7 +180,6 @@ export default async function (hre: HardhatRuntimeEnvironment) {
       treasuryFeeReceiver: "0x9724251d7DeC79FB5C41F31b2793892831Bf1200",
       buybackFeeReceiver: "0x9724251d7DeC79FB5C41F31b2793892831Bf1200",
       validatorFeeReceiver: "0x9724251d7DeC79FB5C41F31b2793892831Bf1200",
-      insuranceFundAddress: "0x9724251d7DeC79FB5C41F31b2793892831Bf1200",
       holdingAddress: "0x9724251d7DeC79FB5C41F31b2793892831Bf1200",
     },
     localhost: {
@@ -194,7 +191,6 @@ export default async function (hre: HardhatRuntimeEnvironment) {
       treasuryFeeReceiver: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       buybackFeeReceiver: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       validatorFeeReceiver: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-      insuranceFundAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       holdingAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
     },
     // Rehearsal of the mainnet deploy against a base fork. Everything except these addresses
@@ -210,7 +206,6 @@ export default async function (hre: HardhatRuntimeEnvironment) {
       treasuryFeeReceiver: forkDeployer,
       buybackFeeReceiver: forkDeployer,
       validatorFeeReceiver: forkDeployer,
-      insuranceFundAddress: forkDeployer,
       holdingAddress: forkDeployer,
     },
   };
