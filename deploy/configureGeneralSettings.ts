@@ -22,13 +22,11 @@ const func = async ({ gmx }: HardhatRuntimeEnvironment) => {
       "validator fee receiver"
     );
   }
-  if (generalConfig.insuranceFundAddress !== undefined) {
-    await setAddressIfDifferent(
-      keys.INSURANCE_FUND_ADDRESS,
-      generalConfig.insuranceFundAddress,
-      "insurance fund address"
-    );
-  }
+  // INSURANCE_FUND_ADDRESS is deliberately not written here. configureInsuranceFund.ts sets it
+  // to the InsuranceVault it deploys; a second writer would race it, and whichever ran last
+  // would win. An EOA winning that race is not inert — InsuranceFundUtils.deposit calls
+  // recordTransferIn on the address, which reverts against an account with no code, so every
+  // liquidation would revert while the insurance share is non-zero.
 
   await setAddressIfDifferent(keys.HOLDING_ADDRESS, generalConfig.holdingAddress, "holding address");
 
