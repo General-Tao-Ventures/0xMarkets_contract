@@ -39,9 +39,16 @@ const func = async ({ gmx }: HardhatRuntimeEnvironment) => {
       );
     }
 
+    // Inverted feeds flip the token-decimal term: 10^(60 + tokenDec - feedDec).
+    // Using the non-inverted formula here would re-break JPY on every deploy
+    // (e.g. write 10^39 over the correct 10^75 after the mainnet multiplier fix).
+    const pythLazerFeedMultiplier = token.pythLazerFeedInverted
+      ? expandDecimals(1, 60 + token.decimals - token.pythLazerFeedDecimals)
+      : expandDecimals(1, 60 - token.decimals - token.pythLazerFeedDecimals);
+
     await setUintIfDifferent(
       keys.pythLazerFeedMultiplierKey(token.address),
-      expandDecimals(1, 60 - token.decimals - token.pythLazerFeedDecimals),
+      pythLazerFeedMultiplier,
       `Pyth Lazer feed multiplier for ${tokenSymbol} ${token.address}`
     );
 

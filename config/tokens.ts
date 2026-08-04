@@ -96,32 +96,36 @@ const config: {
   [network: string]: TokensConfig;
 } = {
   base: {
+    // Mainnet synthetic index tokens are 18 decimals on-chain. Multipliers must use
+    // 10^(60 - tokenDecimals - feedDecimals), or for inverted feeds (JPY)
+    // 10^(60 + tokenDecimals - feedDecimals). The previous decimals:6 values were
+    // Sepolia leftovers and made sizeInTokens / PnL off by 1e12 for EUR/GOLD/etc.
     EUR: {
-      decimals: 6,
+      decimals: 18,
       pythLazerFeedId: 327,
       pythLazerFeedDecimals: 5,
       isAsset: true,
     },
     GBP: {
-      decimals: 6,
+      decimals: 18,
       pythLazerFeedId: 333,
       pythLazerFeedDecimals: 5,
       isAsset: true,
     },
     GOLD: {
-      decimals: 6,
+      decimals: 18,
       pythLazerFeedId: 346, // XAUUSD
       pythLazerFeedDecimals: 3,
       isAsset: true,
     },
     XAG: {
-      decimals: 6,
+      decimals: 18,
       pythLazerFeedId: 345, // XAGUSD
       pythLazerFeedDecimals: 5,
       isAsset: true,
     },
     JPY: {
-      decimals: 6,
+      decimals: 18,
       pythLazerFeedId: 340,
       pythLazerFeedDecimals: 3,
       // feed 340 is USD/JPY; the JPY index token needs JPY/USD, so invert
@@ -129,7 +133,7 @@ const config: {
       isAsset: true,
     },
     WTI: {
-      decimals: 6,
+      decimals: 18,
       pythLazerFeedId: 657, // USOILSPOT
       pythLazerFeedDecimals: 5,
       isAsset: true,
