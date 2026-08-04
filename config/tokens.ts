@@ -97,7 +97,8 @@ const config: {
 } = {
   base: {
     // Mainnet synthetic index tokens are 18 decimals on-chain. Multipliers must use
-    // 10^(60 - tokenDecimals - feedDecimals); the previous decimals:6 values were
+    // 10^(60 - tokenDecimals - feedDecimals), or for inverted feeds (JPY)
+    // 10^(60 + tokenDecimals - feedDecimals). The previous decimals:6 values were
     // Sepolia leftovers and made sizeInTokens / PnL off by 1e12 for EUR/GOLD/etc.
     EUR: {
       decimals: 18,
