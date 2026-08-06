@@ -131,9 +131,10 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     claimableCollateralTimeDivisor: 60 * 60,
     claimableCollateralDelay: 60 * 60 * 24 * 90, // 90d backstop: withheld collateral auto-releases if keeper never sets a factor
 
-    positionFeeVeAlphaFactor: 0,
-    positionFeeTreasuryFactor: 0,
-    positionFeeBuybackFactor: 0,
+    // 40% + 10% + 0% = 50% to receivers; residual 50% stays in the LP pool.
+    positionFeeVeAlphaFactor: percentageToFloat("40%"),
+    positionFeeTreasuryFactor: percentageToFloat("10%"),
+    positionFeeBuybackFactor: percentageToFloat("0%"),
     // Liquidation fee: 70% insurance, 30% buyback, nothing left over for the pool.
     //
     // Only the insurance key routes into the InsuranceVault and credits the per (market, token)
