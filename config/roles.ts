@@ -51,7 +51,10 @@ export default async function (hre: HardhatRuntimeEnvironment): Promise<RolesCon
   } = {
     base: {
       // Deployer EOA signs hardhat deploy (must hold CONFIG_KEEPER).
-      // Ops Safe holds admin/timelock/fee roles. Keeper is hot wallet.
+      // Ops Safe holds admin/timelock/fee roles.
+      // Keepers stay separate hot wallets on the order-keeper VM:
+      //   - order-execution-keeper → 0x9972… (ORDER / FROZEN / ADL)
+      //   - keeper-service (liquidation) → 0x9D98… (LIQUIDATION only)
       // CONTROLLER / ROUTER_PLUGIN granted to contracts by deploy scripts.
       ADL_KEEPER: { "0x9972ebFB450D1b8CD6F1628b56d1d9aD968b29Fc": true },
       CONFIG_KEEPER: { "0xaE05a451B750659F60CE72dcA1bD398675Ff8ECc": true },
@@ -59,7 +62,11 @@ export default async function (hre: HardhatRuntimeEnvironment): Promise<RolesCon
       FEE_KEEPER: { "0xA4FA22FC0238901B95d3bD80D84Bf0D18246aa9C": true },
       FROZEN_ORDER_KEEPER: { "0x9972ebFB450D1b8CD6F1628b56d1d9aD968b29Fc": true },
       GOV_TOKEN_CONTROLLER: { "0xA4FA22FC0238901B95d3bD80D84Bf0D18246aa9C": true },
-      LIQUIDATION_KEEPER: { "0x9972ebFB450D1b8CD6F1628b56d1d9aD968b29Fc": true },
+      LIQUIDATION_KEEPER: {
+        "0x9D981C98F434A43916cee87a649ff15CB252d700": true,
+        // Order keeper retains LIQUIDATION as backup; primary liquidator is 0x9D98…
+        "0x9972ebFB450D1b8CD6F1628b56d1d9aD968b29Fc": true,
+      },
       MARKET_KEEPER: { "0xaE05a451B750659F60CE72dcA1bD398675Ff8ECc": true },
       ORDER_KEEPER: { "0x9972ebFB450D1b8CD6F1628b56d1d9aD968b29Fc": true },
       // Both: deployer for launch agility; Safe for long-term control. Revoke deployer later if desired.
