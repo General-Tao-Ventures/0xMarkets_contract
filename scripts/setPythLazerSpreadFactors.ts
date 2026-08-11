@@ -15,15 +15,17 @@ import { bigNumberify, decimalToFloat } from "../utils/math";
 // USDC (feed 7) is deliberately absent. It is the collateral and pool token rather than a traded
 // pair, so there is no pair spread to widen, and writing a factor here would change collateral
 // valuation instead. Leaving it out keeps it at whatever it is already set to.
+// BTC is listed at 1x, which is already the deployed value. Kept in the table so the intent is
+// recorded rather than looking like an omission; the run skips it because nothing changes.
 const FACTOR_BY_FEED_ID: Record<number, number> = {
   36: 10, // TAO/USD
-  2: 4, // ETH/USD
-  345: 3, // SILVER/USD
-  1: 2, // BTC/USD
-  333: 4, // GBP/USD
-  346: 8, // GOLD/USD
-  327: 8, // EUR/USD
-  340: 8, // USD/JPY
+  346: 4, // GOLD/USD
+  327: 4, // EUR/USD
+  340: 4, // USD/JPY
+  2: 2, // ETH/USD
+  345: 2, // SILVER/USD
+  333: 2, // GBP/USD
+  1: 1, // BTC/USD
 };
 
 async function main() {
