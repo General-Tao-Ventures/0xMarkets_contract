@@ -3,7 +3,7 @@ name: Test
 on:
   pull_request:
   push:
-    branches: [$default_branch, dev]
+    branches: [main, master, audit/fixes, dev]
 
 jobs:
   test:
@@ -28,13 +28,16 @@ jobs:
 
       - name: Install dependencies
         run: |
+          set -e
           for i in 1 2 3; do
             if yarn install; then
-              break
+              exit 0
             fi
-            echo "Retrying in 10 seconds..."
+            echo "yarn install failed (attempt $i/3); retrying in 10 seconds..."
             sleep 10
           done
+          echo "yarn install failed after 3 attempts"
+          exit 1
 
       - name: Compile contracts
         run: yarn hardhat compile && yarn hardhat deploy
