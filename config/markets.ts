@@ -26,6 +26,7 @@ const goldLeverageLadder = [
   { maxNotionalUsd: ethers.constants.MaxUint256, maxLeverage: decimalToFloat(5) },
 ];
 
+// Lab / non-Base crypto ladder (unchanged). Base mainnet uses baseMainnetCryptoLadder below.
 const cryptoLeverageLadder = [
   { maxNotionalUsd: expandDecimals(25_000, 30), maxLeverage: decimalToFloat(100) },
   { maxNotionalUsd: expandDecimals(100_000, 30), maxLeverage: decimalToFloat(50) },
@@ -35,24 +36,33 @@ const cryptoLeverageLadder = [
   { maxNotionalUsd: ethers.constants.MaxUint256, maxLeverage: decimalToFloat(6) },
 ];
 
-// Base mainnet ladders, per the leverage matrix. Tier 0 equals the market's max leverage in
-// each case — Config.setLeverageLadder rejects any tier above the market max.
+// Base mainnet ladders (PR #36 matrix). Tier 0 equals the market's max leverage —
+// Config.setLeverageLadder rejects any tier above the market max.
 const baseMainnetFxLadder = [
-  { maxNotionalUsd: expandDecimals(50_000, 30), maxLeverage: decimalToFloat(200) },
-  { maxNotionalUsd: expandDecimals(200_000, 30), maxLeverage: decimalToFloat(100) },
-  { maxNotionalUsd: expandDecimals(500_000, 30), maxLeverage: decimalToFloat(50) },
-  { maxNotionalUsd: expandDecimals(1_000_000, 30), maxLeverage: decimalToFloat(20) },
-  { maxNotionalUsd: expandDecimals(2_500_000, 30), maxLeverage: decimalToFloat(10) },
-  { maxNotionalUsd: ethers.constants.MaxUint256, maxLeverage: decimalToFloat(4) },
+  { maxNotionalUsd: expandDecimals(50_000, 30), maxLeverage: decimalToFloat(100) },
+  { maxNotionalUsd: expandDecimals(200_000, 30), maxLeverage: decimalToFloat(50) },
+  { maxNotionalUsd: expandDecimals(500_000, 30), maxLeverage: decimalToFloat(25) },
+  { maxNotionalUsd: expandDecimals(1_000_000, 30), maxLeverage: decimalToFloat(10) },
+  { maxNotionalUsd: expandDecimals(2_500_000, 30), maxLeverage: decimalToFloat(5) },
+  { maxNotionalUsd: ethers.constants.MaxUint256, maxLeverage: decimalToFloat(2) },
 ];
 
 const baseMainnetCommodityLadder = [
-  { maxNotionalUsd: expandDecimals(50_000, 30), maxLeverage: decimalToFloat(100) },
-  { maxNotionalUsd: expandDecimals(200_000, 30), maxLeverage: decimalToFloat(50) },
-  { maxNotionalUsd: expandDecimals(500_000, 30), maxLeverage: decimalToFloat(40) },
-  { maxNotionalUsd: expandDecimals(1_000_000, 30), maxLeverage: decimalToFloat(20) },
-  { maxNotionalUsd: expandDecimals(2_500_000, 30), maxLeverage: decimalToFloat(10) },
-  { maxNotionalUsd: ethers.constants.MaxUint256, maxLeverage: decimalToFloat(4) },
+  { maxNotionalUsd: expandDecimals(50_000, 30), maxLeverage: decimalToFloat(50) },
+  { maxNotionalUsd: expandDecimals(200_000, 30), maxLeverage: decimalToFloat(25) },
+  { maxNotionalUsd: expandDecimals(500_000, 30), maxLeverage: decimalToFloat(20) },
+  { maxNotionalUsd: expandDecimals(1_000_000, 30), maxLeverage: decimalToFloat(10) },
+  { maxNotionalUsd: expandDecimals(2_500_000, 30), maxLeverage: decimalToFloat(5) },
+  { maxNotionalUsd: ethers.constants.MaxUint256, maxLeverage: decimalToFloat(2) },
+];
+
+const baseMainnetCryptoLadder = [
+  { maxNotionalUsd: expandDecimals(25_000, 30), maxLeverage: decimalToFloat(50) },
+  { maxNotionalUsd: expandDecimals(100_000, 30), maxLeverage: decimalToFloat(25) },
+  { maxNotionalUsd: expandDecimals(250_000, 30), maxLeverage: decimalToFloat(15) },
+  { maxNotionalUsd: expandDecimals(500_000, 30), maxLeverage: decimalToFloat(10) },
+  { maxNotionalUsd: expandDecimals(1_000_000, 30), maxLeverage: decimalToFloat(5) },
+  { maxNotionalUsd: ethers.constants.MaxUint256, maxLeverage: decimalToFloat(3) },
 ];
 
 export type BaseMarketConfig = {
@@ -563,7 +573,7 @@ const baseMainnetFxOverrides: Partial<BaseMarketConfig> = {
   maxPnlFactorForDeposits: percentageToFloat("90%"),
   maxPnlFactorForWithdrawals: percentageToFloat("70%"),
 
-  maxLeverage: decimalToFloat(200),
+  maxLeverage: decimalToFloat(100),
   leverageLadder: baseMainnetFxLadder,
 };
 
@@ -577,7 +587,7 @@ const baseMainnetCommodityOverrides: Partial<BaseMarketConfig> = {
   maxPnlFactorForDeposits: percentageToFloat("85%"),
   maxPnlFactorForWithdrawals: percentageToFloat("70%"),
 
-  maxLeverage: decimalToFloat(100),
+  maxLeverage: decimalToFloat(50),
   leverageLadder: baseMainnetCommodityLadder,
 };
 
@@ -591,9 +601,9 @@ const baseMainnetCryptoOverrides: Partial<BaseMarketConfig> = {
   maxPnlFactorForDeposits: percentageToFloat("70%"),
   maxPnlFactorForWithdrawals: percentageToFloat("60%"),
 
-  // Ladder tops out at 100x; market max must match tier-0 for Config.setLeverageLadder.
-  maxLeverage: decimalToFloat(100),
-  leverageLadder: cryptoLeverageLadder,
+  // Ladder tops out at 50x; market max must match tier-0 for Config.setLeverageLadder.
+  maxLeverage: decimalToFloat(50),
+  leverageLadder: baseMainnetCryptoLadder,
 };
 
 const stablecoinSwapMarketConfig: Partial<SpotMarketConfig> = {
