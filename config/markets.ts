@@ -301,8 +301,9 @@ type BorrowingRateConfig = Partial<{
 
 const borrowingRateConfig_LowMax_WithLowerBase: BorrowingRateConfig = {
   optimalUsageFactor: percentageToFloat("75%"),
-  baseBorrowingFactor: percentageToFloat("45%").div(SECONDS_PER_YEAR),
-  aboveOptimalUsageBorrowingFactor: percentageToFloat("100%").div(SECONDS_PER_YEAR),
+  // ~10x prior mainnet kink rates (~6%/yr base, ~15%/yr above)
+  baseBorrowingFactor: percentageToFloat("60%").div(SECONDS_PER_YEAR),
+  aboveOptimalUsageBorrowingFactor: percentageToFloat("150%").div(SECONDS_PER_YEAR),
 };
 const borrowingRateConfig_LowMax_WithHigherBase: BorrowingRateConfig = {
   optimalUsageFactor: percentageToFloat("75%"),

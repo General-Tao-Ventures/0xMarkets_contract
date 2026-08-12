@@ -81,8 +81,9 @@ const COMMON_PARAMS = {
   // utilization only — equal util ⇒ equal borrow regardless of pool size.
   // Legacy borrowingFactor / borrowingExponentFactor are ignored on this path.
   optimalUsageFactor: expandDecimals(75, 28), // 75%
-  baseBorrowingFactor: expandDecimals(45, 28).div(SECONDS_PER_YEAR), // 45%/yr
-  aboveOptimalUsageBorrowingFactor: expandDecimals(100, 28).div(SECONDS_PER_YEAR), // 100%/yr
+  // ~10x prior mainnet kink rates (~6%/yr base, ~15%/yr above)
+  baseBorrowingFactor: expandDecimals(60, 28).div(SECONDS_PER_YEAR), // 60%/yr
+  aboveOptimalUsageBorrowingFactor: expandDecimals(150, 28).div(SECONDS_PER_YEAR), // 150%/yr
   // Unused while kink is enabled; kept so re-running this script doesn't wipe them.
   borrowingFactor: expandDecimals(56, 21).div(SECONDS_PER_DAY), // 0.000000056 / 86400
   borrowingExponentFactor: expandDecimals(152, 28), // 1.52
@@ -444,9 +445,9 @@ async function main() {
     `  negativePositionImpactFactor:        ${COMMON_PARAMS.negativePositionImpactFactor.toString()} (0.0000001)`
   );
   console.log(`  optimalUsageFactor:                  ${COMMON_PARAMS.optimalUsageFactor.toString()} (75%)`);
-  console.log(`  baseBorrowingFactor:                 ${COMMON_PARAMS.baseBorrowingFactor.toString()} (45%/yr)`);
+  console.log(`  baseBorrowingFactor:                 ${COMMON_PARAMS.baseBorrowingFactor.toString()} (60%/yr)`);
   console.log(
-    `  aboveOptimalUsageBorrowingFactor:     ${COMMON_PARAMS.aboveOptimalUsageBorrowingFactor.toString()} (100%/yr)`
+    `  aboveOptimalUsageBorrowingFactor:     ${COMMON_PARAMS.aboveOptimalUsageBorrowingFactor.toString()} (150%/yr)`
   );
   console.log(
     `  borrowingFactor:                     ${COMMON_PARAMS.borrowingFactor.toString()} (unused; kink enabled)`

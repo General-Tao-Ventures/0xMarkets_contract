@@ -48,10 +48,11 @@ const KEYS = {
 };
 
 // Matches borrowingRateConfig_LowMax_WithLowerBase in config/markets.ts
+// (~10x prior mainnet kink: ~6%/yr base, ~15%/yr above)
 const TARGETS = {
   optimalUsageFactor: expandDecimals(75, 28), // 75%
-  baseBorrowingFactor: expandDecimals(45, 28).div(SECONDS_PER_YEAR), // 45%/yr
-  aboveOptimalUsageBorrowingFactor: expandDecimals(100, 28).div(SECONDS_PER_YEAR), // 100%/yr
+  baseBorrowingFactor: expandDecimals(60, 28).div(SECONDS_PER_YEAR), // 60%/yr
+  aboveOptimalUsageBorrowingFactor: expandDecimals(150, 28).div(SECONDS_PER_YEAR), // 150%/yr
 };
 
 const NETWORK_CONFIG: Record<
@@ -162,8 +163,8 @@ async function main() {
   console.log(`WRITE:     ${write}`);
   console.log("\n── Targets (kink borrow) ──");
   console.log(`  optimalUsageFactor:              75%`);
-  console.log(`  baseBorrowingFactor:             45%/yr`);
-  console.log(`  aboveOptimalUsageBorrowingFactor: 100%/yr`);
+  console.log(`  baseBorrowingFactor:             60%/yr`);
+  console.log(`  aboveOptimalUsageBorrowingFactor: 150%/yr`);
   console.log(`  skipBorrowingFeeForSmallerSide:  true`);
 
   const dataStore = await ethers.getContractAt("DataStore", cfg.dataStore);
