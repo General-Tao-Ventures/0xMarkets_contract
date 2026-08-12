@@ -387,8 +387,10 @@ const baseMarketConfig: Partial<BaseMarketConfig> = {
   fundingExponentFactor: exponentToFloat("1.48e0"),
 
   minFundingFactorPerSecond: percentageToFloat("1%").div(SECONDS_PER_YEAR),
-  maxFundingFactorPerSecond: percentageToFloat("90%").div(SECONDS_PER_YEAR), // ~0.246% per day
-  fundingIncreaseFactorPerSecond: percentageToFloat("90%")
+  // ~0.03% per 8h (was ~0.082% at 90%/yr). ~2.5x cut from prior 90%/yr cap.
+  maxFundingFactorPerSecond: percentageToFloat("33%").div(SECONDS_PER_YEAR),
+  // Reach the (new) max at 100% imbalance in ~3 hours — same ramp time as before.
+  fundingIncreaseFactorPerSecond: percentageToFloat("33%")
     .div(SECONDS_PER_YEAR)
     .div(SECONDS_PER_HOUR * 3),
   fundingDecreaseFactorPerSecond: decimalToFloat(0), // not applicable if thresholdForDecreaseFunding = 0

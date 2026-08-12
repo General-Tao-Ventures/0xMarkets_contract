@@ -128,19 +128,20 @@ const CRYPTO_COLLATERAL = {
 };
 
 // Per-class funding rate bounds (min/max funding factor per second)
+// ~0.03% per 8h ≈ 33%/yr (was 90%/yr ≈ 0.082%/8h)
 const FX_FUNDING_RATES = {
   minFundingFactorPerSecond: expandDecimals(1, 28).div(SECONDS_PER_YEAR), // 1%/yr
-  maxFundingFactorPerSecond: expandDecimals(90, 28).div(SECONDS_PER_YEAR), // 90%/yr
+  maxFundingFactorPerSecond: expandDecimals(33, 28).div(SECONDS_PER_YEAR), // 33%/yr
 };
 
 const COMMODITY_FUNDING_RATES = {
   minFundingFactorPerSecond: expandDecimals(1, 28).div(SECONDS_PER_YEAR), // 1%/yr
-  maxFundingFactorPerSecond: expandDecimals(90, 28).div(SECONDS_PER_YEAR), // 90%/yr
+  maxFundingFactorPerSecond: expandDecimals(33, 28).div(SECONDS_PER_YEAR), // 33%/yr
 };
 
 const CRYPTO_FUNDING_RATES = {
   minFundingFactorPerSecond: expandDecimals(1, 28).div(SECONDS_PER_YEAR), // 1%/yr
-  maxFundingFactorPerSecond: expandDecimals(90, 28).div(SECONDS_PER_YEAR), // 90%/yr
+  maxFundingFactorPerSecond: expandDecimals(33, 28).div(SECONDS_PER_YEAR), // 33%/yr
 };
 
 // ── Parameter update entry ──
@@ -498,19 +499,19 @@ async function main() {
     `  FX minFundingFactorPerSecond:          ${FX_FUNDING_RATES.minFundingFactorPerSecond.toString()} (1%/yr)`
   );
   console.log(
-    `  FX maxFundingFactorPerSecond:          ${FX_FUNDING_RATES.maxFundingFactorPerSecond.toString()} (90%/yr)`
+    `  FX maxFundingFactorPerSecond:          ${FX_FUNDING_RATES.maxFundingFactorPerSecond.toString()} (33%/yr ~0.03%/8h)`
   );
   console.log(
     `  Commodity minFundingFactorPerSecond:    ${COMMODITY_FUNDING_RATES.minFundingFactorPerSecond.toString()} (1%/yr)`
   );
   console.log(
-    `  Commodity maxFundingFactorPerSecond:    ${COMMODITY_FUNDING_RATES.maxFundingFactorPerSecond.toString()} (90%/yr)`
+    `  Commodity maxFundingFactorPerSecond:    ${COMMODITY_FUNDING_RATES.maxFundingFactorPerSecond.toString()} (33%/yr ~0.03%/8h)`
   );
   console.log(
     `  Crypto minFundingFactorPerSecond:       ${CRYPTO_FUNDING_RATES.minFundingFactorPerSecond.toString()} (1%/yr)`
   );
   console.log(
-    `  Crypto maxFundingFactorPerSecond:       ${CRYPTO_FUNDING_RATES.maxFundingFactorPerSecond.toString()} (90%/yr)`
+    `  Crypto maxFundingFactorPerSecond:       ${CRYPTO_FUNDING_RATES.maxFundingFactorPerSecond.toString()} (33%/yr ~0.03%/8h)`
   );
 
   if (!write) {
