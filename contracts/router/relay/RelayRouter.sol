@@ -14,7 +14,7 @@ contract RelayRouter is BaseRelayRouter {
     bytes32 public constant UPDATE_ORDER_TYPEHASH =
         keccak256(
             bytes(
-                "UpdateOrder(bytes32 key,UpdateOrderParams params,uint256 executionFeeIncrease,bytes32 relayParams)UpdateOrderParams(uint256 sizeDeltaUsd,uint256 acceptablePrice,uint256 triggerPrice,uint256 minOutputAmount,uint256 validFromTime,bool autoCancel)"
+                "UpdateOrder(bytes32 key,UpdateOrderParams params,bytes32 relayParams)UpdateOrderParams(uint256 sizeDeltaUsd,uint256 acceptablePrice,uint256 triggerPrice,uint256 minOutputAmount,uint256 validFromTime,bool autoCancel)"
             )
         );
     bytes32 public constant UPDATE_ORDER_PARAMS_TYPEHASH =
@@ -90,10 +90,10 @@ contract RelayRouter is BaseRelayRouter {
         address account,
         bytes32 key,
         UpdateOrderParams calldata params,
-        uint256 executionFeeIncrease
+        uint256 executionFeeIncrease // funded and set by the relayer, deliberately outside the signed hash
     ) external nonReentrant withOraclePricesForAtomicAction(relayParams.oracleParams) onlyRelayKeeper {
         _validateGaslessFeature();
-        bytes32 structHash = _getUpdateOrderStructHash(relayParams, key, params, executionFeeIncrease);
+        bytes32 structHash = _getUpdateOrderStructHash(relayParams, key, params);
         _validateCall(relayParams, account, structHash);
 
         _updateOrder(
@@ -127,8 +127,7 @@ contract RelayRouter is BaseRelayRouter {
     function _getUpdateOrderStructHash(
         RelayParams calldata relayParams,
         bytes32 key,
-        UpdateOrderParams calldata params,
-        uint256 executionFeeIncrease
+        UpdateOrderParams calldata params
     ) internal pure returns (bytes32) {
         return
             keccak256(
@@ -136,7 +135,6 @@ contract RelayRouter is BaseRelayRouter {
                     UPDATE_ORDER_TYPEHASH,
                     key,
                     _getUpdateOrderParamsStructHash(params),
-                    executionFeeIncrease,
                     _getRelayParamsHash(relayParams)
                 )
             );

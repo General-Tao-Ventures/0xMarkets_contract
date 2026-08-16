@@ -27,7 +27,7 @@ contract SubaccountRelayRouter is BaseRelayRouter {
     bytes32 public constant UPDATE_ORDER_TYPEHASH =
         keccak256(
             bytes(
-                "UpdateOrder(address account,bytes32 key,UpdateOrderParams params,uint256 executionFeeIncrease,bytes32 relayParams,bytes32 subaccountApproval)UpdateOrderParams(uint256 sizeDeltaUsd,uint256 acceptablePrice,uint256 triggerPrice,uint256 minOutputAmount,uint256 validFromTime,bool autoCancel)"
+                "UpdateOrder(address account,bytes32 key,UpdateOrderParams params,bytes32 relayParams,bytes32 subaccountApproval)UpdateOrderParams(uint256 sizeDeltaUsd,uint256 acceptablePrice,uint256 triggerPrice,uint256 minOutputAmount,uint256 validFromTime,bool autoCancel)"
             )
         );
     bytes32 public constant UPDATE_ORDER_PARAMS_TYPEHASH =
@@ -136,17 +136,10 @@ contract SubaccountRelayRouter is BaseRelayRouter {
         address subaccount,
         bytes32 key,
         UpdateOrderParams calldata params,
-        uint256 executionFeeIncrease
+        uint256 executionFeeIncrease // funded and set by the relayer, deliberately outside the signed hash
     ) external nonReentrant withOraclePricesForAtomicAction(relayParams.oracleParams) onlyRelayKeeper {
         _validateGaslessFeature();
-        bytes32 structHash = _getUpdateOrderStructHash(
-            relayParams,
-            subaccountApproval,
-            account,
-            key,
-            params,
-            executionFeeIncrease
-        );
+        bytes32 structHash = _getUpdateOrderStructHash(relayParams, subaccountApproval, account, key, params);
         _validateCall(relayParams, subaccount, structHash);
         _handleSubaccountAction(account, subaccount, Keys.SUBACCOUNT_ORDER_ACTION, subaccountApproval);
 
@@ -369,8 +362,7 @@ contract SubaccountRelayRouter is BaseRelayRouter {
         SubaccountApproval calldata subaccountApproval,
         address account,
         bytes32 key,
-        UpdateOrderParams calldata params,
-        uint256 executionFeeIncrease
+        UpdateOrderParams calldata params
     ) internal pure returns (bytes32) {
         return
             keccak256(
@@ -379,7 +371,6 @@ contract SubaccountRelayRouter is BaseRelayRouter {
                     account,
                     key,
                     _getUpdateOrderParamsStructHash(params),
-                    executionFeeIncrease,
                     _getRelayParamsHash(relayParams),
                     keccak256(abi.encode(subaccountApproval))
                 )

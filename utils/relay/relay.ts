@@ -177,7 +177,6 @@ const UPDATE_ORDER_TYPES = {
   UpdateOrder: [
     { name: "key", type: "bytes32" },
     { name: "params", type: "UpdateOrderParams" },
-    { name: "executionFeeIncrease", type: "uint256" },
     { name: "relayParams", type: "bytes32" },
   ],
   UpdateOrderParams: [
@@ -190,19 +189,10 @@ const UPDATE_ORDER_TYPES = {
   ],
 };
 
-export async function getUpdateOrderSignature({
-  signer,
-  relayParams,
-  verifyingContract,
-  params,
-  key,
-  executionFeeIncrease,
-  chainId,
-}) {
+export async function getUpdateOrderSignature({ signer, relayParams, verifyingContract, params, key, chainId }) {
   const typedData = {
     key,
     params,
-    executionFeeIncrease,
     relayParams: hashRelayParams(relayParams),
   };
 

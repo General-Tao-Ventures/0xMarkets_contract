@@ -253,6 +253,41 @@ describe("RelayRouter", () => {
       const order = await reader.getOrder(dataStore.address, orderKey);
       expect(order.numbers.executionFee).eq(relayerFunds);
     });
+
+    it("keeps the execution fee increase out of the signer's control on update", async () => {
+      await usdc.connect(user0).approve(router.address, expandDecimals(10_000, 6));
+      await wnt.connect(user0).approve(router.address, expandDecimals(1000, 18));
+
+      await sendCreateOrder(createOrderParams);
+      const orderKey = (await getOrderKeys(dataStore, 0, 1))[0];
+
+      const relayerIncrease = expandDecimals(1, 15);
+      const keeperWntBefore = await wnt.balanceOf(relayKeeper.address);
+
+      await sendUpdateOrder({
+        sender: relayKeeper,
+        signer: user0,
+        feeParams: { feeToken: usdc.address, feeAmount: expandDecimals(1, 6) },
+        tokenPermits: [],
+        account: user0.address,
+        key: orderKey,
+        params: {
+          sizeDeltaUsd: decimalToFloat(2000),
+          acceptablePrice: decimalToFloat(4950),
+          triggerPrice: decimalToFloat(4850),
+          minOutputAmount: 800,
+          validFromTime: 0,
+          autoCancel: false,
+        },
+        executionFeeIncrease: relayerIncrease,
+        deadline: 9999999999,
+        relayRouter,
+        chainId,
+      });
+
+      // the signature does not cover the increase, so only the relayer's number moves WNT
+      expect(keeperWntBefore.sub(await wnt.balanceOf(relayKeeper.address))).eq(relayerIncrease);
+    });
   });
 
   describe("updateOrder and cancelOrder", () => {
