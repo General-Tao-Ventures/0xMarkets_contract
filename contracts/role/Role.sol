@@ -110,4 +110,9 @@ library Role {
      * Hash: 0xcdf6da7ad30d8b9afea66fb1cb11b1b7d0b50e9b30b69561a3ca52c39251360c
      */
     bytes32 public constant CONTRIBUTOR_DISTRIBUTOR = keccak256(abi.encode("CONTRIBUTOR_DISTRIBUTOR"));
+    /**
+     * @dev The RELAY_KEEPER role.
+     * Hash: 0xec5397d9ddd358873375724dfe56ec53380fa49e2961ccd563d0559a0e56e6e4
+     */
+    bytes32 public constant RELAY_KEEPER = keccak256(abi.encode("RELAY_KEEPER"));
 }
