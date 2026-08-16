@@ -152,6 +152,7 @@ export async function sendCreateOrder(p: {
   tokenPermits?: any;
   feeParams: { feeToken: string; feeAmount: BigNumberish };
   collateralDeltaAmount: BigNumberish;
+  executionFee: BigNumberish;
   account: string;
   params: any;
   signature?: string;
@@ -169,7 +170,7 @@ export async function sendCreateOrder(p: {
 
   return p.relayRouter
     .connect(p.sender)
-    .createOrder({ ...relayParams, signature }, p.account, p.collateralDeltaAmount, p.params);
+    .createOrder({ ...relayParams, signature }, p.account, p.collateralDeltaAmount, p.executionFee, p.params);
 }
 
 const UPDATE_ORDER_TYPES = {

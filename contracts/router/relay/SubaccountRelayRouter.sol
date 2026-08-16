@@ -88,6 +88,7 @@ contract SubaccountRelayRouter is BaseRelayRouter {
         address account, // main account
         address subaccount,
         uint256 collateralDeltaAmount,
+        uint256 executionFee, // funded and set by the relayer, deliberately outside the signed hash
         IBaseOrderUtils.CreateOrderParams memory params
     )
         external
@@ -121,6 +122,7 @@ contract SubaccountRelayRouter is BaseRelayRouter {
                 relayParams,
                 account,
                 collateralDeltaAmount,
+                executionFee,
                 params,
                 true // isSubaccount
             );

@@ -118,6 +118,7 @@ abstract contract BaseRelayRouter is RoleModule, ReentrancyGuard, OracleModule {
         RelayParams calldata relayParams,
         address account,
         uint256 collateralDeltaAmount,
+        uint256 executionFee,
         IBaseOrderUtils.CreateOrderParams memory params,
         bool isSubaccount
     ) internal returns (bytes32) {
@@ -127,16 +128,14 @@ abstract contract BaseRelayRouter is RoleModule, ReentrancyGuard, OracleModule {
             orderVault: orderVault
         });
 
-        // OrderUtils.createOrder reads the execution fee from the WNT recorded into the order vault,
-        // and reverts if it is below the signed amount.
-        _handleRelay(
-            contracts,
-            relayParams,
-            account,
-            address(contracts.orderVault),
-            params.numbers.executionFee,
-            isSubaccount
-        );
+        // The execution fee is funded by the relayer, so the relayer sets it and the signed value is
+        // overwritten. Leaving the signed value in force would let anyone name an arbitrary amount of
+        // the relayer's WNT, cancel the order, and take the refund: the refund goes to the account,
+        // and cancellationReceiver cannot be pointed at the relayer because it also receives the
+        // collateral.
+        params.numbers.executionFee = executionFee;
+
+        _handleRelay(contracts, relayParams, account, address(contracts.orderVault), executionFee, isSubaccount);
 
         if (
             params.orderType == Order.OrderType.MarketSwap ||

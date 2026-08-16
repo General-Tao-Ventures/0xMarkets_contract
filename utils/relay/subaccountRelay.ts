@@ -128,6 +128,7 @@ export async function sendCreateOrder(p: {
   tokenPermits?: any;
   feeParams: { feeToken: string; feeAmount: BigNumberish };
   collateralDeltaAmount: BigNumberish;
+  executionFee: BigNumberish;
   account: string;
   subaccount: string;
   params: any;
@@ -167,6 +168,7 @@ export async function sendCreateOrder(p: {
       p.account,
       p.subaccount,
       p.collateralDeltaAmount,
+      p.executionFee,
       p.params
     );
 }

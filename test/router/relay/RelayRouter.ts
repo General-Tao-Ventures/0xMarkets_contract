@@ -16,7 +16,7 @@ const BAD_SIGNATURE =
 describe("RelayRouter", () => {
   let fixture;
   let user0, user1, user2, relayKeeper;
-  let dataStore, roleStore, router, relayRouter, ethUsdMarket, wnt, usdc;
+  let dataStore, roleStore, router, relayRouter, reader, ethUsdMarket, wnt, usdc;
   let chainId;
   const referralCode = hashString("referralCode");
 
@@ -26,7 +26,7 @@ describe("RelayRouter", () => {
   beforeEach(async () => {
     fixture = await deployFixture();
     ({ user0, user1, user2 } = fixture.accounts);
-    ({ dataStore, roleStore, router, relayRouter, ethUsdMarket, wnt, usdc } = fixture.contracts);
+    ({ dataStore, roleStore, router, relayRouter, reader, ethUsdMarket, wnt, usdc } = fixture.contracts);
 
     // the relayer is our own service, gated on RELAY_KEEPER rather than Gelato's address
     relayKeeper = user2;
@@ -78,6 +78,7 @@ describe("RelayRouter", () => {
       },
       tokenPermits: [],
       collateralDeltaAmount: expandDecimals(1, 17),
+      executionFee: expandDecimals(1, 15), // chosen by the relayer, not the signer
       account: user0.address,
       params: defaultParams,
       deadline: 9999999999,
@@ -220,6 +221,37 @@ describe("RelayRouter", () => {
       await expect(
         sendCreateOrder({ ...createOrderParams, tokenPermits: [tokenPermit] })
       ).to.be.revertedWithCustomError(errorsContract, "InvalidPermitSpender");
+    });
+  });
+
+  describe("relayer float", () => {
+    // ZEROMARK-44 / 186: a malicious subaccount inflated the execution fee and harvested the refund
+    // through its callback. Here the relayer funds the execution fee instead of the account, so the
+    // same shape drains the relayer rather than the user. Check where the WNT actually lands.
+    it("ignores an inflated execution fee in the signed order", async () => {
+      await usdc.connect(user0).approve(router.address, expandDecimals(1000, 6));
+      await wnt.connect(user0).approve(router.address, expandDecimals(1000, 18));
+
+      const inflated = expandDecimals(5, 18); // what a malicious signer asks the relayer to fund
+      const relayerFunds = expandDecimals(1, 15); // what the relayer is actually willing to pay
+      const keeperWntBefore = await wnt.balanceOf(relayKeeper.address);
+
+      await sendCreateOrder({
+        ...createOrderParams,
+        executionFee: relayerFunds,
+        params: {
+          ...defaultParams,
+          numbers: { ...defaultParams.numbers, executionFee: inflated },
+        },
+      });
+
+      // the relayer's exposure is set by the relayer, not by whatever the user signed
+      const pulled = keeperWntBefore.sub(await wnt.balanceOf(relayKeeper.address));
+      expect(pulled).eq(relayerFunds);
+
+      const orderKey = (await getOrderKeys(dataStore, 0, 1))[0];
+      const order = await reader.getOrder(dataStore.address, orderKey);
+      expect(order.numbers.executionFee).eq(relayerFunds);
     });
   });
 

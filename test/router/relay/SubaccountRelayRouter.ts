@@ -90,6 +90,7 @@ describe("SubaccountRelayRouter", () => {
         data: ["0x", "0x"],
       },
       collateralDeltaAmount: expandDecimals(1, 17),
+      executionFee: expandDecimals(1, 15), // chosen by the relayer, not the session key
       account: user0.address,
       subaccount: subaccount.address,
       params: defaultParams,
