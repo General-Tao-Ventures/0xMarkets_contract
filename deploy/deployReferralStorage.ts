@@ -1,3 +1,4 @@
+import { configNetworkName } from "../utils/network";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { createDeployFunction } from "../utils/deploy";
 
@@ -32,8 +33,8 @@ const func = createDeployFunction({
 });
 
 func.skip = async ({ network }: HardhatRuntimeEnvironment) => {
-  const shouldDeployForNetwork = ["avalancheFuji", "arbitrumSepolia", "hardhat"];
-  return !shouldDeployForNetwork.includes(network.name);
+  const shouldDeployForNetwork = ["avalancheFuji", "arbitrumSepolia", "base", "baseSepolia", "hardhat", "localhost"];
+  return !shouldDeployForNetwork.includes(configNetworkName(network.name));
 };
 
 export default func;

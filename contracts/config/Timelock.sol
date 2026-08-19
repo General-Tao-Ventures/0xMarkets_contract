@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-v4/security/ReentrancyGuard.sol";
 
 import "../role/RoleModule.sol";
 import "../event/EventEmitter.sol";
@@ -27,6 +27,8 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
     using EnumerableValues for EnumerableSet.Bytes32Set;
 
     uint256 public constant MAX_TIMELOCK_DELAY = 5 days;
+    // floor the delay so it can't be deployed at a value that defeats the timelock
+    uint256 public constant MIN_TIMELOCK_DELAY = 1 days;
 
     DataStore public immutable dataStore;
     EventEmitter public immutable eventEmitter;
@@ -272,44 +274,6 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
         );
     }
 
-    // @dev signal setting of the fee receiver
-    // @param account the new fee receiver
-    function signalSetFeeReceiver(address account) external onlyTimelockAdmin nonReentrant {
-        if (account == address(0)) {
-            revert Errors.InvalidFeeReceiver(account);
-        }
-
-        bytes32 actionKey = _setFeeReceiverActionKey(account);
-        _signalPendingAction(actionKey, "setFeeReceiver");
-
-        EventUtils.EventLogData memory eventData;
-        eventData.addressItems.initItems(1);
-        eventData.addressItems.setItem(0, "account", account);
-        eventEmitter.emitEventLog1(
-            "SignalSetFeeReceiver",
-            actionKey,
-            eventData
-        );
-    }
-
-    // @dev set the fee receiver
-    // @param account the new fee receiver
-    function setFeeReceiverAfterSignal(address account) external onlyTimelockAdmin nonReentrant {
-        bytes32 actionKey = _setFeeReceiverActionKey(account);
-        _validateAndClearAction(actionKey, "setFeeReceiver");
-
-        dataStore.setAddress(Keys.FEE_RECEIVER, account);
-
-        EventUtils.EventLogData memory eventData;
-        eventData.addressItems.initItems(1);
-        eventData.addressItems.setItem(0, "account", account);
-        eventEmitter.emitEventLog1(
-            "SetFeeReceiver",
-            actionKey,
-            eventData
-        );
-    }
-
     // @dev signal granting of a role
     // @param account the account to grant the role
     // @param roleKey the role to grant
@@ -477,6 +441,7 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
     function signalSetDataStream(
         address token,
         bytes32 feedId,
+        bool dataStreamInverted,
         uint256 dataStreamMultiplier,
         uint256 dataStreamSpreadReductionFactor
     ) external onlyTimelockAdmin nonReentrant {
@@ -487,6 +452,7 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
         bytes32 actionKey = _setDataStreamActionKey(
             token,
             feedId,
+            dataStreamInverted,
             dataStreamMultiplier,
             dataStreamSpreadReductionFactor
         );
@@ -498,6 +464,8 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
         eventData.addressItems.setItem(0, "token", token);
         eventData.bytes32Items.initItems(1);
         eventData.bytes32Items.setItem(0, "feedId", feedId);
+        eventData.boolItems.initItems(1);
+        eventData.boolItems.setItem(0, "dataStreamInverted", dataStreamInverted);
         eventData.uintItems.initItems(2);
         eventData.uintItems.setItem(0, "dataStreamMultiplier", dataStreamMultiplier);
         eventData.uintItems.setItem(1, "dataStreamSpreadReductionFactor", dataStreamSpreadReductionFactor);
@@ -516,12 +484,14 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
     function setDataStreamAfterSignal(
         address token,
         bytes32 feedId,
+        bool dataStreamInverted,
         uint256 dataStreamMultiplier,
         uint256 dataStreamSpreadReductionFactor
     ) external onlyTimelockAdmin nonReentrant {
         bytes32 actionKey = _setDataStreamActionKey(
             token,
             feedId,
+            dataStreamInverted,
             dataStreamMultiplier,
             dataStreamSpreadReductionFactor
         );
@@ -529,6 +499,7 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
         _validateAndClearAction(actionKey, "setDataStream");
 
         dataStore.setBytes32(Keys.dataStreamIdKey(token), feedId);
+        dataStore.setBool(Keys.dataStreamInvertedKey(token), dataStreamInverted);
         dataStore.setUint(Keys.dataStreamMultiplierKey(token), dataStreamMultiplier);
         dataStore.setUint(Keys.dataStreamSpreadReductionFactorKey(token), dataStreamSpreadReductionFactor);
 
@@ -537,11 +508,86 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
         eventData.addressItems.setItem(0, "token", token);
         eventData.bytes32Items.initItems(1);
         eventData.bytes32Items.setItem(0, "feedId", feedId);
+        eventData.boolItems.initItems(1);
+        eventData.boolItems.setItem(0, "dataStreamInverted", dataStreamInverted);
         eventData.uintItems.initItems(2);
         eventData.uintItems.setItem(0, "dataStreamMultiplier", dataStreamMultiplier);
         eventData.uintItems.setItem(1, "dataStreamSpreadReductionFactor", dataStreamSpreadReductionFactor);
         eventEmitter.emitEventLog1(
             "SetDataStream",
+            actionKey,
+            eventData
+        );
+    }
+
+    function signalSetPythLazerFeed(
+        address token,
+        uint256 pythLazerFeedId,
+        bool pythLazerFeedInverted,
+        uint256 pythLazerFeedMultiplier,
+        uint256 pythLazerFeedSpreadFactor
+    ) external onlyTimelockAdmin nonReentrant {
+        bytes32 actionKey = _setPythLazerFeedActionKey(
+            token,
+            pythLazerFeedId,
+            pythLazerFeedInverted,
+            pythLazerFeedMultiplier,
+            pythLazerFeedSpreadFactor
+        );
+
+        _signalPendingAction(actionKey, "setPythLazerFeed");
+
+        EventUtils.EventLogData memory eventData;
+        eventData.addressItems.initItems(1);
+        eventData.addressItems.setItem(0, "token", token);
+        eventData.boolItems.initItems(1);
+        eventData.boolItems.setItem(0, "pythLazerFeedInverted", pythLazerFeedInverted);
+        eventData.uintItems.initItems(3);
+        eventData.uintItems.setItem(0, "pythLazerFeedId", pythLazerFeedId);
+        eventData.uintItems.setItem(1, "pythLazerFeedMultiplier", pythLazerFeedMultiplier);
+        eventData.uintItems.setItem(2, "pythLazerFeedSpreadFactor", pythLazerFeedSpreadFactor);
+        eventEmitter.emitEventLog1(
+            "SetPythLazerFeed",
+            actionKey,
+            eventData
+        );
+    }
+
+    function setPythLazerFeedAfterSignal(
+        address token,
+        uint256 pythLazerFeedId,
+        bool pythLazerFeedInverted,
+        uint256 pythLazerFeedMultiplier,
+        uint256 pythLazerFeedSpreadFactor
+    ) external onlyTimelockAdmin nonReentrant {
+        bytes32 actionKey = _setPythLazerFeedActionKey(
+            token,
+            pythLazerFeedId,
+            pythLazerFeedInverted,
+            pythLazerFeedMultiplier,
+            pythLazerFeedSpreadFactor
+        );
+
+        _validateAndClearAction(actionKey, "setPythLazerFeed");
+
+        // ZEROMARK-112: feedId is read by PythLazerFeedProvider via getUint, so it must be written with setUint —
+        // setBytes32 lands in a different DataStore mapping and the provider reads back 0.
+        dataStore.setUint(Keys.pythLazerFeedIdKey(token), pythLazerFeedId);
+        dataStore.setBool(Keys.pythLazerFeedInvertedKey(token), pythLazerFeedInverted);
+        dataStore.setUint(Keys.pythLazerFeedMultiplierKey(token), pythLazerFeedMultiplier);
+        dataStore.setUint(Keys.pythLazerFeedSpreadFactorKey(token), pythLazerFeedSpreadFactor);
+
+        EventUtils.EventLogData memory eventData;
+        eventData.addressItems.initItems(1);
+        eventData.addressItems.setItem(0, "token", token);
+        eventData.boolItems.initItems(1);
+        eventData.boolItems.setItem(0, "pythLazerFeedInverted", pythLazerFeedInverted);
+        eventData.uintItems.initItems(3);
+        eventData.uintItems.setItem(0, "pythLazerFeedId", pythLazerFeedId);
+        eventData.uintItems.setItem(1, "pythLazerFeedMultiplier", pythLazerFeedMultiplier);
+        eventData.uintItems.setItem(2, "pythLazerFeedSpreadFactor", pythLazerFeedSpreadFactor);
+        eventEmitter.emitEventLog1(
+            "SetPythLazerFeed",
             actionKey,
             eventData
         );
@@ -599,10 +645,6 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
         return keccak256(abi.encodePacked("removeOracleSigner", account));
     }
 
-    function _setFeeReceiverActionKey(address account) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked("setFeeReceiver", account));
-    }
-
     function _grantRoleActionKey(address account, bytes32 roleKey) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked("grantRole", account, roleKey));
     }
@@ -631,6 +673,7 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
     function _setDataStreamActionKey(
         address token,
         bytes32 feedId,
+        bool dataStreamInverted,
         uint256 dataStreamMultiplier,
         uint256 dataStreamSpreadReductionFactor
     ) internal pure returns (bytes32) {
@@ -638,8 +681,26 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
             "setDataStream",
             token,
             feedId,
+            dataStreamInverted,
             dataStreamMultiplier,
             dataStreamSpreadReductionFactor
+        ));
+    }
+
+    function _setPythLazerFeedActionKey(
+        address token,
+        uint256 pythLazerFeedId,
+        bool pythLazerFeedInverted,
+        uint256 pythLazerFeedMultiplier,
+        uint256 pythLazerFeedSpreadFactor
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(
+            "setPythLazerFeed",
+            token,
+            pythLazerFeedId,
+            pythLazerFeedInverted,
+            pythLazerFeedMultiplier,
+            pythLazerFeedSpreadFactor
         ));
     }
 
@@ -687,6 +748,9 @@ contract Timelock is ReentrancyGuard, RoleModule, BasicMulticall {
     function _validateTimelockDelay() internal view {
         if (timelockDelay > MAX_TIMELOCK_DELAY) {
             revert Errors.MaxTimelockDelayExceeded(timelockDelay);
+        }
+        if (timelockDelay < MIN_TIMELOCK_DELAY) {
+            revert Errors.MinTimelockDelayNotMet(timelockDelay);
         }
     }
 }

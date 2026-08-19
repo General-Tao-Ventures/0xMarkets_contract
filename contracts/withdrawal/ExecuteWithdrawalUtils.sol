@@ -153,34 +153,33 @@ library ExecuteWithdrawalUtils {
             withdrawal.longTokenSwapPath().length + withdrawal.shortTokenSwapPath().length
         );
 
-        GasUtils.payExecutionFee(
+        // ! EXECUTION FEE EXEMPTION
+        // Keeper is subsidised out-of-band (payExecutionFee is not called), but
+        // any fee sent with the withdrawal is refunded to the receiver on success
+        // so it is not stranded in the vault. No-op when the fee is
+        // zero. Symmetric with the cancellation path.
+        GasUtils.refundExecutionFee(
             params.dataStore,
             params.eventEmitter,
             params.withdrawalVault,
             params.key,
             withdrawal.callbackContract(),
             withdrawal.executionFee(),
-            params.startingGas,
-            cache.oraclePriceCount,
-            params.keeper,
             withdrawal.receiver()
         );
 
         return cache.result;
     }
 
-    /**
-     * @dev executes a withdrawal.
-     * @param params ExecuteWithdrawalParams.
-     * @param withdrawal The withdrawal to execute.
-     */
-    function _executeWithdrawal(
+    function _incrementFee(
         ExecuteWithdrawalParams memory params,
         Withdrawal.Props memory withdrawal,
         Market.Props memory market,
         MarketUtils.MarketPrices memory prices
-    ) internal returns (ExecuteWithdrawalResult memory) {
+    ) internal returns (_ExecuteWithdrawalCache memory) {
         _ExecuteWithdrawalCache memory cache;
+
+        address uiFeeReceiver = withdrawal.uiFeeReceiver();
 
         (cache.longTokenOutputAmount, cache.shortTokenOutputAmount) = _getOutputAmounts(
             params,
@@ -194,23 +193,14 @@ library ExecuteWithdrawalUtils {
             market.marketToken,
             cache.longTokenOutputAmount,
             false, // forPositiveImpact
-            withdrawal.uiFeeReceiver(),
+            uiFeeReceiver,
             params.swapPricingType
-        );
-
-        FeeUtils.incrementClaimableFeeAmount(
-            params.dataStore,
-            params.eventEmitter,
-            market.marketToken,
-            market.longToken,
-            cache.longTokenFees.feeReceiverAmount,
-            Keys.WITHDRAWAL_FEE_TYPE
         );
 
         FeeUtils.incrementClaimableUiFeeAmount(
             params.dataStore,
             params.eventEmitter,
-            withdrawal.uiFeeReceiver(),
+            uiFeeReceiver,
             market.marketToken,
             market.longToken,
             cache.longTokenFees.uiFeeAmount,
@@ -222,23 +212,14 @@ library ExecuteWithdrawalUtils {
             market.marketToken,
             cache.shortTokenOutputAmount,
             false, // forPositiveImpact
-            withdrawal.uiFeeReceiver(),
+            uiFeeReceiver,
             params.swapPricingType
-        );
-
-        FeeUtils.incrementClaimableFeeAmount(
-            params.dataStore,
-            params.eventEmitter,
-            market.marketToken,
-            market.shortToken,
-            cache.shortTokenFees.feeReceiverAmount,
-            Keys.WITHDRAWAL_FEE_TYPE
         );
 
         FeeUtils.incrementClaimableUiFeeAmount(
             params.dataStore,
             params.eventEmitter,
-            withdrawal.uiFeeReceiver(),
+            uiFeeReceiver,
             market.marketToken,
             market.shortToken,
             cache.shortTokenFees.uiFeeAmount,
@@ -286,7 +267,22 @@ library ExecuteWithdrawalUtils {
 
         params.withdrawalVault.syncTokenBalance(market.marketToken);
 
+        return cache;
+    }
+
+    function __executeWithdrawal(
+        ExecuteWithdrawalParams memory params,
+        Withdrawal.Props memory withdrawal,
+        Market.Props memory market,
+        MarketUtils.MarketPrices memory prices,
+        _ExecuteWithdrawalCache memory cache
+    ) internal returns (ExecuteWithdrawalResult memory) {
         ExecuteWithdrawalResult memory result;
+
+        address uiFeeReceiver = withdrawal.uiFeeReceiver();
+        address withdrawalReceiver = withdrawal.receiver();
+        bool unwrap = withdrawal.shouldUnwrapNativeToken();
+
         (result.outputToken, result.outputAmount) = _swap(
             params,
             market,
@@ -294,9 +290,9 @@ library ExecuteWithdrawalUtils {
             cache.longTokenOutputAmount,
             withdrawal.longTokenSwapPath(),
             withdrawal.minLongTokenAmount(),
-            withdrawal.receiver(),
-            withdrawal.uiFeeReceiver(),
-            withdrawal.shouldUnwrapNativeToken()
+            withdrawalReceiver,
+            uiFeeReceiver,
+            unwrap
         );
 
         (result.secondaryOutputToken, result.secondaryOutputAmount) = _swap(
@@ -306,9 +302,9 @@ library ExecuteWithdrawalUtils {
             cache.shortTokenOutputAmount,
             withdrawal.shortTokenSwapPath(),
             withdrawal.minShortTokenAmount(),
-            withdrawal.receiver(),
-            withdrawal.uiFeeReceiver(),
-            withdrawal.shouldUnwrapNativeToken()
+            withdrawalReceiver,
+            uiFeeReceiver,
+            unwrap
         );
 
         SwapPricingUtils.emitSwapFeesCollected(
@@ -335,6 +331,24 @@ library ExecuteWithdrawalUtils {
         // it may be possible to invoke external contracts before the validations
         // are called
         MarketUtils.validateMarketTokenBalance(params.dataStore, market);
+
+        return result;
+    }
+
+    /**
+     * @dev executes a withdrawal.
+     * @param params ExecuteWithdrawalParams.
+     * @param withdrawal The withdrawal to execute.
+     */
+    function _executeWithdrawal(
+        ExecuteWithdrawalParams memory params,
+        Withdrawal.Props memory withdrawal,
+        Market.Props memory market,
+        MarketUtils.MarketPrices memory prices
+    ) internal returns (ExecuteWithdrawalResult memory) {
+        _ExecuteWithdrawalCache memory cache = _incrementFee(params, withdrawal, market, prices);
+
+        ExecuteWithdrawalResult memory result = __executeWithdrawal(params, withdrawal, market, prices, cache);
 
         MarketPoolValueInfo.Props memory poolValueInfo = MarketUtils.getPoolValueInfo(
             params.dataStore,

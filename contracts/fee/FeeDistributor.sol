@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-v4/security/ReentrancyGuard.sol";
 
 import "../v1/IVaultV1.sol";
 import "../v1/IRouterV1.sol";
@@ -52,35 +52,6 @@ contract FeeDistributor is ReentrancyGuard, RoleModule {
         exchangeRouterV2 = _exchangeRouterV2;
 
         bridgingToken = _bridgingToken;
-    }
-
-    // the startIndexV2 and endIndexV2 is passed into the function instead of iterating
-    // all markets in the market factory as there may be a large number of v2 markets
-    // which could cause the function to exceed the max block gas limit
-    // for v1 it is assumed that the total number of tokens to claim fees for is manageable
-    // so the tokens are directly iterated for v1
-    function claimFees(
-        uint256 startIndexV2,
-        uint256 endIndexV2
-    ) external nonReentrant onlyFeeDistributionKeeper {
-        FeeBatch.Props memory feeBatch;
-
-        uint256 countV1 = vaultV1.allWhitelistedTokensLength();
-
-        address[] memory marketKeysV2 = MarketStoreUtils.getMarketKeys(dataStore, startIndexV2, endIndexV2);
-        uint256 countV2 = marketKeysV2.length;
-
-        uint256 totalCount = countV1 + countV2 * 2;
-        feeBatch.feeTokens = new address[](totalCount);
-        feeBatch.feeAmounts = new uint256[](totalCount);
-        feeBatch.remainingAmounts = new uint256[](totalCount);
-
-        feeBatch = _claimFeesV1(feeBatch, countV1);
-        feeBatch = _claimFeesV2(feeBatch, marketKeysV2, countV1, countV2);
-        feeBatch.createdAt = Chain.currentTimestamp();
-
-        bytes32 key = NonceUtils.getNextKey(dataStore);
-        FeeBatchStoreUtils.set(dataStore, key, feeBatch);
     }
 
     function swapFeesUsingV1(
@@ -154,46 +125,6 @@ contract FeeDistributor is ReentrancyGuard, RoleModule {
             feeBatch.feeTokens[i] = token;
             feeBatch.feeAmounts[i] = amount;
             feeBatch.remainingAmounts[i] = amount;
-        }
-
-        return feeBatch;
-    }
-
-    function _claimFeesV2(
-        FeeBatch.Props memory feeBatch,
-        address[] memory marketKeys,
-        uint256 countV1,
-        uint256 countV2
-    ) internal returns (FeeBatch.Props memory) {
-        for (uint256 i; i < countV2; i++) {
-            address marketKey = marketKeys[i];
-            Market.Props memory market = MarketStoreUtils.get(dataStore, marketKey);
-
-            uint256 longTokenFeeAmount = FeeUtils.claimFees(
-                dataStore,
-                eventEmitter,
-                market.marketToken,
-                market.longToken,
-                address(this)
-            );
-
-            uint256 shortTokenFeeAmount = FeeUtils.claimFees(
-                dataStore,
-                eventEmitter,
-                market.marketToken,
-                market.shortToken,
-                address(this)
-            );
-
-            uint256 baseIndex = countV1 + i * 2;
-
-            feeBatch.feeTokens[baseIndex] = market.longToken;
-            feeBatch.feeAmounts[baseIndex] = longTokenFeeAmount;
-            feeBatch.remainingAmounts[baseIndex] = longTokenFeeAmount;
-
-            feeBatch.feeTokens[baseIndex + 1] = market.shortToken;
-            feeBatch.feeAmounts[baseIndex + 1] = shortTokenFeeAmount;
-            feeBatch.remainingAmounts[baseIndex + 1] = shortTokenFeeAmount;
         }
 
         return feeBatch;

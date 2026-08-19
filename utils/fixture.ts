@@ -72,6 +72,11 @@ export async function deployFixture() {
   const eventEmitter = await hre.ethers.getContract("EventEmitter");
   const oracleStore = await hre.ethers.getContract("OracleStore");
   const orderVault = await hre.ethers.getContract("OrderVault");
+  const insuranceVault = await hre.ethers.getContract("InsuranceVault");
+  const insuranceFundEventUtils = await hre.ethers.getContract("InsuranceFundEventUtils");
+  const insuranceFundUtils = await hre.ethers.getContract("InsuranceFundUtils");
+  const settlementHandler = await hre.ethers.getContract("SettlementHandler");
+  const insuranceFundHandler = await hre.ethers.getContract("InsuranceFundHandler");
   const glvVault = await hre.ethers.getContract("GlvVault");
   const marketFactory = await hre.ethers.getContract("MarketFactory");
   const glvFactory = await hre.ethers.getContract("GlvFactory");
@@ -95,6 +100,8 @@ export async function deployFixture() {
   const exchangeRouter = await hre.ethers.getContract("ExchangeRouter");
   const gelatoRelayRouter = await hre.ethers.getContract("GelatoRelayRouter");
   const subaccountGelatoRelayRouter = await hre.ethers.getContract("SubaccountGelatoRelayRouter");
+  const relayRouter = await hre.ethers.getContract("RelayRouter");
+  const subaccountRelayRouter = await hre.ethers.getContract("SubaccountRelayRouter");
   const subaccountRouter = await hre.ethers.getContract("SubaccountRouter");
   const oracle = await hre.ethers.getContract("Oracle");
   const gmOracleProvider = await hre.ethers.getContract("GmOracleProvider");
@@ -112,6 +119,7 @@ export async function deployFixture() {
   const increasePositionUtils = await hre.ethers.getContract("IncreasePositionUtils");
   const positionUtils = await hre.ethers.getContract("PositionUtils");
   const swapUtils = await hre.ethers.getContract("SwapUtils");
+  const subaccountUtils = await hre.ethers.getContract("SubaccountUtils");
   const referralStorage = await hre.ethers.getContract("ReferralStorage");
   const feeHandler = await hre.ethers.getContract("FeeHandler");
   const mockVaultV1 = await hre.ethers.getContract("MockVaultV1");
@@ -121,6 +129,7 @@ export async function deployFixture() {
     wnt.address,
     usdc.address,
     DEFAULT_MARKET_TYPE,
+    false,
     marketFactory.address,
     roleStore.address,
     dataStore.address
@@ -132,6 +141,7 @@ export async function deployFixture() {
     wnt.address,
     usdt.address,
     DEFAULT_MARKET_TYPE,
+    false,
     marketFactory.address,
     roleStore.address,
     dataStore.address
@@ -143,6 +153,7 @@ export async function deployFixture() {
     wnt.address,
     usdc.address,
     DEFAULT_MARKET_TYPE,
+    false,
     marketFactory.address,
     roleStore.address,
     dataStore.address
@@ -154,6 +165,7 @@ export async function deployFixture() {
     usdc.address,
     usdc.address,
     DEFAULT_MARKET_TYPE,
+    false,
     marketFactory.address,
     roleStore.address,
     dataStore.address
@@ -165,6 +177,7 @@ export async function deployFixture() {
     wnt.address,
     wnt.address,
     DEFAULT_MARKET_TYPE,
+    false,
     marketFactory.address,
     roleStore.address,
     dataStore.address
@@ -176,6 +189,7 @@ export async function deployFixture() {
     wbtc.address,
     usdc.address,
     DEFAULT_MARKET_TYPE,
+    false,
     marketFactory.address,
     roleStore.address,
     dataStore.address
@@ -187,6 +201,7 @@ export async function deployFixture() {
     usdc.address,
     usdc.address,
     DEFAULT_MARKET_TYPE,
+    false,
     marketFactory.address,
     roleStore.address,
     dataStore.address
@@ -198,6 +213,7 @@ export async function deployFixture() {
     wnt.address,
     usdc.address,
     DEFAULT_MARKET_TYPE,
+    false,
     marketFactory.address,
     roleStore.address,
     dataStore.address
@@ -257,6 +273,11 @@ export async function deployFixture() {
       shiftVault,
       oracleStore,
       orderVault,
+      insuranceVault,
+      insuranceFundEventUtils,
+      insuranceFundUtils,
+      settlementHandler,
+      insuranceFundHandler,
       marketFactory,
       depositHandler,
       depositUtils,
@@ -272,6 +293,8 @@ export async function deployFixture() {
       exchangeRouter,
       gelatoRelayRouter,
       subaccountGelatoRelayRouter,
+      relayRouter,
+      subaccountRelayRouter,
       subaccountRouter,
       oracle,
       gmOracleProvider,
@@ -289,6 +312,7 @@ export async function deployFixture() {
       increasePositionUtils,
       positionUtils,
       swapUtils,
+      subaccountUtils,
       referralStorage,
       usdcPriceFeed,
       wethPriceFeed,
@@ -320,6 +344,6 @@ export async function deployFixture() {
       glvReader,
       mockVaultV1,
     },
-    props: { oracleSalt, signerIndexes: [0, 1, 2, 3, 4, 5, 6], executionFee: "1000000000000000" },
+    props: { oracleSalt, signerIndexes: [0, 1, 2, 3, 4, 5, 6], executionFee: "0" },
   };
 }

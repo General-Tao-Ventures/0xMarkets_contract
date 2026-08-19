@@ -5,13 +5,23 @@ pragma solidity ^0.8.0;
 // @title Keys
 // @dev Keys for values in the DataStore
 library Keys {
+    // @dev key for the address of the USDC token
+    bytes32 public constant USDC = keccak256(abi.encode("USDC"));
     // @dev key for the address of the wrapped native token
     bytes32 public constant WNT = keccak256(abi.encode("WNT"));
     // @dev key for the nonce value used in NonceUtils
     bytes32 public constant NONCE = keccak256(abi.encode("NONCE"));
 
-    // @dev for sending received fees
-    bytes32 public constant FEE_RECEIVER = keccak256(abi.encode("FEE_RECEIVER"));
+    // @dev address that accumulates the veAlpha share of position fees
+    bytes32 public constant VEALPHA_FEE_RECEIVER = keccak256(abi.encode("VEALPHA_FEE_RECEIVER"));
+    // @dev address that accumulates the treasury share of position fees
+    bytes32 public constant TREASURY_FEE_RECEIVER = keccak256(abi.encode("TREASURY_FEE_RECEIVER"));
+    // @dev address that accumulates the buyback share of position fees
+    bytes32 public constant BUYBACK_FEE_RECEIVER = keccak256(abi.encode("BUYBACK_FEE_RECEIVER"));
+    // @dev address that accumulates the validator share of liquidation fees
+    bytes32 public constant VALIDATOR_FEE_RECEIVER = keccak256(abi.encode("VALIDATOR_FEE_RECEIVER"));
+    // @dev address of the insurance fund — receives a share of liquidation fees
+    bytes32 public constant INSURANCE_FUND_ADDRESS = keccak256(abi.encode("INSURANCE_FUND_ADDRESS"));
 
     // @dev for holding tokens that could not be sent out
     bytes32 public constant HOLDING_ADDRESS = keccak256(abi.encode("HOLDING_ADDRESS"));
@@ -170,6 +180,8 @@ library Keys {
     bytes32 public constant CLAIM_AFFILIATE_REWARDS_FEATURE_DISABLED = keccak256(abi.encode("CLAIM_AFFILIATE_REWARDS_FEATURE_DISABLED"));
     // @dev key for whether the claim ui fees feature is disabled
     bytes32 public constant CLAIM_UI_FEES_FEATURE_DISABLED = keccak256(abi.encode("CLAIM_UI_FEES_FEATURE_DISABLED"));
+    // @dev key for whether the claim (per-receiver protocol) fees feature is disabled
+    bytes32 public constant CLAIM_FEES_FEATURE_DISABLED = keccak256(abi.encode("CLAIM_FEES_FEATURE_DISABLED"));
     // @dev key for whether the subaccount feature is disabled
     bytes32 public constant SUBACCOUNT_FEATURE_DISABLED = keccak256(abi.encode("SUBACCOUNT_FEATURE_DISABLED"));
     // @dev key for whether the gasless feature is disabled
@@ -198,14 +210,40 @@ library Keys {
     // @dev key for the sequencer grace duration
     bytes32 public constant SEQUENCER_GRACE_DURATION = keccak256(abi.encode("SEQUENCER_GRACE_DURATION"));
 
-    // @dev key for the percentage amount of position fees to be received
-    bytes32 public constant POSITION_FEE_RECEIVER_FACTOR = keccak256(abi.encode("POSITION_FEE_RECEIVER_FACTOR"));
-    // @dev key for the percentage amount of liquidation fees to be received
-    bytes32 public constant LIQUIDATION_FEE_RECEIVER_FACTOR = keccak256(abi.encode("LIQUIDATION_FEE_RECEIVER_FACTOR"));
-    // @dev key for the percentage amount of swap fees to be received
-    bytes32 public constant SWAP_FEE_RECEIVER_FACTOR = keccak256(abi.encode("SWAP_FEE_RECEIVER_FACTOR"));
-    // @dev key for the percentage amount of borrowing fees to be received
-    bytes32 public constant BORROWING_FEE_RECEIVER_FACTOR = keccak256(abi.encode("BORROWING_FEE_RECEIVER_FACTOR"));
+    // @dev key for the share of position fees routed to veAlpha
+    bytes32 public constant POSITION_FEE_VEALPHA_FACTOR = keccak256(abi.encode("POSITION_FEE_VEALPHA_FACTOR"));
+    // @dev key for the share of position fees routed to treasury
+    bytes32 public constant POSITION_FEE_TREASURY_FACTOR = keccak256(abi.encode("POSITION_FEE_TREASURY_FACTOR"));
+    // @dev key for the share of position fees routed to buyback
+    bytes32 public constant POSITION_FEE_BUYBACK_FACTOR = keccak256(abi.encode("POSITION_FEE_BUYBACK_FACTOR"));
+    // @dev key for the share of liquidation fees routed to the validator pool
+    bytes32 public constant LIQUIDATION_FEE_VALIDATOR_FACTOR = keccak256(abi.encode("LIQUIDATION_FEE_VALIDATOR_FACTOR"));
+    // @dev key for the share of liquidation fees routed to the insurance fund
+    bytes32 public constant LIQUIDATION_FEE_INSURANCE_FACTOR = keccak256(abi.encode("LIQUIDATION_FEE_INSURANCE_FACTOR"));
+    // @dev key for the share of liquidation fees routed to buyback
+    bytes32 public constant LIQUIDATION_FEE_BUYBACK_FACTOR = keccak256(abi.encode("LIQUIDATION_FEE_BUYBACK_FACTOR"));
+
+    // @dev per-market realized-drawdown threshold; InsuranceFundUtils.attemptInjectPool
+    // moves reserves back into the pool when drawdown crosses this.
+    // type(uint256).max is the off-sentinel.
+    bytes32 public constant INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR = keccak256(abi.encode("INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR"));
+    // @dev per (market, token) insurance reserve balance. Tokens physically held by the
+    // InsuranceVault singleton (resolved via INSURANCE_FUND_ADDRESS); this DataStore
+    // entry is bookkeeping segregating reserves by market+token.
+    // Invariant: InsuranceVault.tokenBalances(token) >= sum across markets of insuranceFundBalanceKey(market, token).
+    bytes32 public constant INSURANCE_FUND_BALANCE = keccak256(abi.encode("INSURANCE_FUND_BALANCE"));
+    // @dev per-market USD snapshot of poolValueExcludingUnrealizedPnl at the last epoch start.
+    bytes32 public constant INSURANCE_FUND_EPOCH_POOL_VALUE = keccak256(abi.encode("INSURANCE_FUND_EPOCH_POOL_VALUE"));
+    // @dev per-market MarketToken supply snapshot at the last epoch start, paired with
+    // INSURANCE_FUND_EPOCH_POOL_VALUE so drawdown is measured per-share (not on absolute pool value).
+    bytes32 public constant INSURANCE_FUND_EPOCH_SUPPLY = keccak256(abi.encode("INSURANCE_FUND_EPOCH_SUPPLY"));
+    // @dev per-market timestamp of the last epoch start. Treat the fund as disabled
+    // when this is zero (first epoch) or older than INSURANCE_FUND_MAX_EPOCH_AGE.
+    bytes32 public constant INSURANCE_FUND_EPOCH_START = keccak256(abi.encode("INSURANCE_FUND_EPOCH_START"));
+    // @dev maximum allowed age of an epoch snapshot before the fund auto-disables (global, seconds).
+    bytes32 public constant INSURANCE_FUND_MAX_EPOCH_AGE = keccak256(abi.encode("INSURANCE_FUND_MAX_EPOCH_AGE"));
+    // @dev epoch length used by SettlementHandler.snapshotEpoch idempotency guard (global, seconds).
+    bytes32 public constant INSURANCE_FUND_EPOCH_LENGTH = keccak256(abi.encode("INSURANCE_FUND_EPOCH_LENGTH"));
 
     // @dev key for the base gas limit used when estimating execution fee
     bytes32 public constant ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1 = keccak256(abi.encode("ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1"));
@@ -253,8 +291,24 @@ library Keys {
     bytes32 public constant REFUND_EXECUTION_FEE_GAS_LIMIT = keccak256(abi.encode("REFUND_EXECUTION_FEE_GAS_LIMIT"));
     bytes32 public constant SAVED_CALLBACK_CONTRACT = keccak256(abi.encode("SAVED_CALLBACK_CONTRACT"));
 
-    // @dev key for the min collateral factor
-    bytes32 public constant MIN_COLLATERAL_FACTOR = keccak256(abi.encode("MIN_COLLATERAL_FACTOR"));
+    // @dev key for the max allowed leverage per market (used as denominator in dynamic MMR)
+    bytes32 public constant MAX_LEVERAGE = keccak256(abi.encode("MAX_LEVERAGE"));
+    // @dev key for the min allowed leverage per market
+    bytes32 public constant MIN_LEVERAGE = keccak256(abi.encode("MIN_LEVERAGE"));
+    // @dev key for the lower clamp of the dynamic maintenance margin ratio
+    bytes32 public constant MIN_MMR = keccak256(abi.encode("MIN_MMR"));
+    // @dev key for the upper clamp of the dynamic maintenance margin ratio
+    bytes32 public constant MAX_MMR = keccak256(abi.encode("MAX_MMR"));
+    // @dev key for the tuning multiplier applied to the leverage ratio in the dynamic MMR formula
+    bytes32 public constant MMR_TUNING = keccak256(abi.encode("MMR_TUNING"));
+
+    // @dev key for the number of leverage ladder tiers configured per market
+    bytes32 public constant LEVERAGE_LADDER_TIER_COUNT = keccak256(abi.encode("LEVERAGE_LADDER_TIER_COUNT"));
+    // @dev key for the upper notional bound of a leverage ladder tier
+    bytes32 public constant LEVERAGE_LADDER_MAX_NOTIONAL = keccak256(abi.encode("LEVERAGE_LADDER_MAX_NOTIONAL"));
+    // @dev key for the max leverage allowed within a leverage ladder tier
+    bytes32 public constant LEVERAGE_LADDER_MAX_LEVERAGE = keccak256(abi.encode("LEVERAGE_LADDER_MAX_LEVERAGE"));
+
     // @dev key for the min collateral factor for open interest multiplier
     bytes32 public constant MIN_COLLATERAL_FACTOR_FOR_OPEN_INTEREST_MULTIPLIER = keccak256(abi.encode("MIN_COLLATERAL_FACTOR_FOR_OPEN_INTEREST_MULTIPLIER"));
     // @dev key for the min allowed collateral in USD
@@ -330,6 +384,8 @@ library Keys {
     bytes32 public constant PRICE_FEED_HEARTBEAT_DURATION = keccak256(abi.encode("PRICE_FEED_HEARTBEAT_DURATION"));
     // @dev key for data stream feed id
     bytes32 public constant DATA_STREAM_ID = keccak256(abi.encode("DATA_STREAM_ID"));
+    // @dev key for data stream inverted flag (e.g. USD/JPY for JPY)
+    bytes32 public constant DATA_STREAM_INVERTED = keccak256(abi.encode("DATA_STREAM_INVERTED"));
     // @dev key for data stream feed multiplier
     bytes32 public constant DATA_STREAM_MULTIPLIER = keccak256(abi.encode("DATA_STREAM_MULTIPLIER"));
     bytes32 public constant DATA_STREAM_SPREAD_REDUCTION_FACTOR = keccak256(abi.encode("DATA_STREAM_SPREAD_REDUCTION_FACTOR"));
@@ -387,6 +443,9 @@ library Keys {
     bytes32 public constant CLAIMABLE_COLLATERAL_FACTOR = keccak256(abi.encode("CLAIMABLE_COLLATERAL_FACTOR"));
     // @dev key for claimable collateral time divisor
     bytes32 public constant CLAIMABLE_COLLATERAL_TIME_DIVISOR = keccak256(abi.encode("CLAIMABLE_COLLATERAL_TIME_DIVISOR"));
+    // @dev key for the delay after which withheld claimable collateral auto-releases (100%) when no
+    //      claimable factor was ever set, so funds cannot be frozen by keeper inaction (GMX backstop)
+    bytes32 public constant CLAIMABLE_COLLATERAL_DELAY = keccak256(abi.encode("CLAIMABLE_COLLATERAL_DELAY"));
     // @dev key for claimed collateral amount
     bytes32 public constant CLAIMED_COLLATERAL_AMOUNT = keccak256(abi.encode("CLAIMED_COLLATERAL_AMOUNT"));
     bytes32 public constant IGNORE_OPEN_INTEREST_FOR_USAGE_FACTOR = keccak256(abi.encode("IGNORE_OPEN_INTEREST_FOR_USAGE_FACTOR"));
@@ -478,6 +537,29 @@ library Keys {
     // @dev constant for user initiated cancel reason
     string public constant USER_INITIATED_CANCEL = "USER_INITIATED_CANCEL";
 
+    // @dev key for the baseline swap direction (true for long to short, false for short to long) for a market
+    bytes32 public constant BASELINE_SWAP_LONGS_PAY_SHORTS = keccak256(abi.encode("BASELINE_SWAP_LONGS_PAY_SHORTS"));
+    // @dev key for the baseline swap amount per day for a market
+    bytes32 public constant BASELINE_SWAP_PER_DAY = keccak256(abi.encode("BASELINE_SWAP_PER_DAY"));
+
+    // @dev key for Pyth Lazer feed ID
+    bytes32 public constant PYTH_LAZER_FEED_ID = keccak256(abi.encode("PYTH_LAZER_FEED_ID"));
+    // @dev key for Pyth Lazere feed inverted flag (e.g. USD/JPY for JPY)
+    bytes32 public constant PYTH_LAZER_FEED_INVERTED = keccak256(abi.encode("PYTH_LAZER_FEED_INVERTED"));
+    // @dev key for Pyth Lazer feed multiplier
+    // @dev bounds the USD size of a relay fee swap initiated by a subaccount; a subaccount is
+    // authorised by action count, not amount, so without this it can route an arbitrary amount
+    // of the main account's tokens through a value-destroying atomic swap
+    bytes32 public constant MAX_RELAY_FEE_SWAP_USD_FOR_SUBACCOUNT =
+        keccak256(abi.encode("MAX_RELAY_FEE_SWAP_USD_FOR_SUBACCOUNT"));
+    bytes32 public constant PYTH_LAZER_FEED_MULTIPLIER = keccak256(abi.encode("PYTH_LAZER_FEED_MULTIPLIER"));
+    // @dev the feed exponent the multiplier was derived from, so a config/feed mismatch is caught on-chain
+    bytes32 public constant PYTH_LAZER_FEED_EXPONENT = keccak256(abi.encode("PYTH_LAZER_FEED_EXPONENT"));
+    // @dev key for Pyth Lazer feed per-token spread factor applied to confidence (FLOAT_PRECISION-scaled)
+    bytes32 public constant PYTH_LAZER_FEED_SPREAD_FACTOR = keccak256(abi.encode("PYTH_LAZER_FEED_SPREAD_FACTOR"));
+    bytes32 public constant PYTH_HERMES_FEED_MULTIPLIER = keccak256(abi.encode("PYTH_HERMES_FEED_MULTIPLIER"));
+
+
     // @dev function used to calculate fullKey for a given market parameter
     // @param baseKey the base key for the market parameter
     // @param data the additional data for the market parameter
@@ -554,6 +636,14 @@ library Keys {
     // @param token the token for the fee
     function claimableFeeAmountKey(address market, address token) internal pure returns (bytes32) {
         return keccak256(abi.encode(CLAIMABLE_FEE_AMOUNT, market, token));
+    }
+
+    // @dev key for the claimable fee amount
+    // @param market the market for the fee
+    // @param token the token for the fee
+    // @param receiver the address that can claim the fee
+    function claimableFeeAmountKey(address market, address token, address receiver) internal pure returns (bytes32) {
+        return keccak256(abi.encode(CLAIMABLE_FEE_AMOUNT, market, token, receiver));
     }
 
     // @dev key for the claimable ui fee amount
@@ -904,6 +994,15 @@ library Keys {
         ));
     }
 
+    // @dev key for whether claim (per-receiver protocol) fees is disabled
+    // @param the claim fees module
+    function claimFeesFeatureDisabledKey(address module) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            CLAIM_FEES_FEATURE_DISABLED,
+            module
+        ));
+    }
+
     // @dev key for whether subaccounts are disabled
     // @param the subaccount module
     function subaccountFeatureDisabledKey(address module) internal pure returns (bytes32) {
@@ -996,12 +1095,79 @@ library Keys {
        ));
    }
 
-   // @dev the min collateral factor key
-   // @param the market for the min collateral factor
-   function minCollateralFactorKey(address market) internal pure returns (bytes32) {
+   // @dev the max leverage key
+   // @param market the market for the max leverage
+   function maxLeverageKey(address market) internal pure returns (bytes32) {
        return keccak256(abi.encode(
-           MIN_COLLATERAL_FACTOR,
+           MAX_LEVERAGE,
            market
+       ));
+   }
+
+   // @dev the min leverage key
+   // @param market the market for the min leverage
+   function minLeverageKey(address market) internal pure returns (bytes32) {
+       return keccak256(abi.encode(
+           MIN_LEVERAGE,
+           market
+       ));
+   }
+
+   // @dev the min mmr key 
+   // @param market the market for the min mmr
+   function minMmrKey(address market) internal pure returns (bytes32) {
+       return keccak256(abi.encode(
+           MIN_MMR,
+           market
+       ));
+   }
+
+   // @dev the max mmr key
+   // @param market the market for the max mmr
+   function maxMmrKey(address market) internal pure returns (bytes32) {
+       return keccak256(abi.encode(
+           MAX_MMR,
+           market
+       ));
+   }
+
+   // @dev the mmr tuning key
+   // @param market the market for the mmr tuning
+   function mmrTuningKey(address market) internal pure returns (bytes32) {
+       return keccak256(abi.encode(
+           MMR_TUNING,
+           market
+       ));
+   }
+
+   // @dev the leverage ladder tier count key
+   // @param market the market the ladder is configured for
+   function leverageLadderTierCountKey(address market) internal pure returns (bytes32) {
+       return keccak256(abi.encode(
+           LEVERAGE_LADDER_TIER_COUNT,
+           market
+       ));
+   }
+
+   // @dev the leverage ladder max notional key for a given tier
+   // @param market the market the ladder is configured for
+   // @param tierIndex the zero-based index of the tier
+   function leverageLadderMaxNotionalKey(address market, uint256 tierIndex) internal pure returns (bytes32) {
+       return keccak256(abi.encode(
+           LEVERAGE_LADDER_MAX_NOTIONAL,
+           market,
+           tierIndex
+       ));
+   }
+
+   // @dev the leverage ladder max leverage key for a given tier
+   // @param market the market the ladder is configured for
+   // @param tierIndex the zero-based index of the tier
+   function leverageLadderMaxLeverageKey(address market, uint256 tierIndex) internal pure returns (bytes32) {
+       return keccak256(abi.encode(
+           LEVERAGE_LADDER_MAX_LEVERAGE,
+           market,
+           tierIndex
        ));
    }
 
@@ -1132,6 +1298,47 @@ library Keys {
     function liquidationFeeFactorKey(address market) internal pure returns (bytes32) {
         return keccak256(abi.encode(
             LIQUIDATION_FEE_FACTOR,
+            market
+        ));
+    }
+
+    // @dev per-market drawdown trigger threshold
+    function insuranceFundDrawdownTriggerFactorKey(address market) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR,
+            market
+        ));
+    }
+
+    // @dev per (market, token) insurance reserve balance
+    function insuranceFundBalanceKey(address market, address token) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            INSURANCE_FUND_BALANCE,
+            market,
+            token
+        ));
+    }
+
+    // @dev per-market USD pool-value snapshot at last epoch start
+    function insuranceFundEpochPoolValueKey(address market) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            INSURANCE_FUND_EPOCH_POOL_VALUE,
+            market
+        ));
+    }
+
+    // @dev per-market MarketToken supply snapshot at last epoch start
+    function insuranceFundEpochSupplyKey(address market) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            INSURANCE_FUND_EPOCH_SUPPLY,
+            market
+        ));
+    }
+
+    // @dev per-market timestamp of the last epoch start
+    function insuranceFundEpochStartKey(address market) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            INSURANCE_FUND_EPOCH_START,
             market
         ));
     }
@@ -1853,6 +2060,16 @@ library Keys {
         ));
     }
 
+    // @dev key for data stream inverted flag (e.g. USD/JPY for JPY)
+    // @param token the token to get the key for
+    // @return key for data stream inverted flag
+    function dataStreamInvertedKey(address token) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            DATA_STREAM_INVERTED,
+            token
+        ));
+    }
+
     // @dev key for data stream feed multiplier
     // @param token the token to get the key for
     // @return key for data stream feed multiplier
@@ -2109,6 +2326,86 @@ library Keys {
     function buybackMaxPriceImpactFactorKey(address token) internal pure returns (bytes32) {
         return keccak256(abi.encode(
             BUYBACK_MAX_PRICE_IMPACT_FACTOR,
+            token
+        ));
+    }
+
+    // @dev key for the baseline swap direction (true for long to short, false for short to long) for a market
+    // @param market the market to check
+    // @return key for baseline swap direction
+    function baselineSwapLongsPayShortsKey(address market) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            BASELINE_SWAP_LONGS_PAY_SHORTS,
+            market
+        ));
+    }
+
+    // @dev key for the baseline swap amount per day for a market
+    // @param market the market to check
+    // @return key for baseline swap amount per day
+    function baselineSwapPerDayKey(address market) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            BASELINE_SWAP_PER_DAY,
+            market
+        ));
+    }
+
+    // @dev key for Pyth Lazeer feed ID
+    // @param token the token to get the key for
+    // @return key for Pyth Lazer feed ID
+    function pythLazerFeedIdKey(address token) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            PYTH_LAZER_FEED_ID,
+            token
+        ));
+    }
+
+    // @dev key for Pyth Lazeer feed inverted flag (e.g. USD/JPY for JPY)
+    // @param token the token to get the key for
+    // @return key for Pyth Lazeer feed inverted flag
+    function pythLazerFeedInvertedKey(address token) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            PYTH_LAZER_FEED_INVERTED,
+            token
+        ));
+    }
+
+    // @dev key for Pyth Lazeer feedfeed multiplier
+    // @param token the token to get the key for
+    // @return key for Pyth Lazeer feed multiplier
+    function pythLazerFeedMultiplierKey(address token) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            PYTH_LAZER_FEED_MULTIPLIER,
+            token
+        ));
+    }
+
+    // @dev key for the expected Pyth Lazer feed exponent
+    // @param token the token to get the key for
+    // @return key for the expected Pyth Lazer feed exponent
+    function pythLazerFeedExponentKey(address token) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            PYTH_LAZER_FEED_EXPONENT,
+            token
+        ));
+    }
+
+    // @dev key for Pyth Lazer feed per-token confidence spread factor
+    // @param token the token to get the key for
+    // @return key for Pyth Lazer feed spread factor
+    function pythLazerFeedSpreadFactorKey(address token) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            PYTH_LAZER_FEED_SPREAD_FACTOR,
+            token
+        ));
+    }
+
+    // @dev key for Pyth Hermes feed per-token decimal multiplier
+    // @param token the token to get the key for
+    // @return key for Pyth Hermes feed multiplier
+    function pythHermesFeedMultiplierKey(address token) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            PYTH_HERMES_FEED_MULTIPLIER,
             token
         ));
     }

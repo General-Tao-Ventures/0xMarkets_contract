@@ -1,6 +1,7 @@
 import { expect } from "chai";
 
 import { deployFixture } from "../../utils/fixture";
+import { deployContract } from "../../utils/deploy";
 import { getEventData } from "../../utils/event";
 import { expandDecimals, decimalToFloat } from "../../utils/math";
 import { handleDeposit } from "../../utils/deposit";
@@ -188,5 +189,121 @@ describe("Exchange.AutoCancelOrder", () => {
     expect(await getOrderCount(dataStore)).eq(1);
     expect(await getAccountOrderCount(dataStore, user0.address)).eq(1);
     expect(await getOrderKeys(dataStore, 0, 10)).eql([orderKey]);
+  });
+
+  it("clears all auto-cancel orders on close even after MAX_AUTO_CANCEL_ORDERS is lowered", async () => {
+    await dataStore.setUint(keys.MAX_AUTO_CANCEL_ORDERS, 3);
+
+    await handleOrder(fixture, {
+      create: {
+        market: ethUsdMarket,
+        initialCollateralToken: wnt,
+        initialCollateralDeltaAmount: expandDecimals(10, 18),
+        sizeDeltaUsd: decimalToFloat(200 * 1000),
+        acceptablePrice: expandDecimals(5001, 12),
+        orderType: OrderType.MarketIncrease,
+        isLong: true,
+      },
+    });
+
+    // attach three auto-cancel orders to the position
+    for (let i = 0; i < 3; i++) {
+      await createOrder(fixture, {
+        market: ethUsdMarket,
+        initialCollateralToken: wnt,
+        initialCollateralDeltaAmount: 0,
+        sizeDeltaUsd: decimalToFloat(200 * 1000),
+        acceptablePrice: expandDecimals(4800, 12),
+        orderType: OrderType.StopLossDecrease,
+        isLong: true,
+        autoCancel: true,
+      });
+    }
+
+    expect(await getOrderCount(dataStore)).eq(3);
+
+    // lower the cap below the number of already-attached orders
+    await dataStore.setUint(keys.MAX_AUTO_CANCEL_ORDERS, 1);
+
+    // fully close the position
+    await handleOrder(fixture, {
+      create: {
+        market: ethUsdMarket,
+        initialCollateralToken: wnt,
+        initialCollateralDeltaAmount: 0,
+        sizeDeltaUsd: decimalToFloat(200 * 1000),
+        acceptablePrice: expandDecimals(4800, 12),
+        orderType: OrderType.MarketDecrease,
+        isLong: true,
+      },
+    });
+
+    // every auto-cancel order is cleared, none survive the lowered cap to hit a reopened position
+    expect(await getAccountPositionCount(dataStore, user0.address)).eq(0);
+    expect(await getOrderCount(dataStore)).eq(0);
+    expect(await getAccountOrderCount(dataStore, user0.address)).eq(0);
+  });
+
+  it("auto-cancel cleanup on close does not run the trader's callback (gas grief fix)", async () => {
+    const mockCallbackReceiver = await deployContract("MockCallbackReceiver", []);
+
+    // Open a $200k long.
+    await handleOrder(fixture, {
+      create: {
+        market: ethUsdMarket,
+        initialCollateralToken: wnt,
+        initialCollateralDeltaAmount: expandDecimals(10, 18),
+        sizeDeltaUsd: decimalToFloat(200 * 1000),
+        acceptablePrice: expandDecimals(5001, 12),
+        orderType: OrderType.MarketIncrease,
+        isLong: true,
+      },
+    });
+
+    expect(await getAccountPositionCount(dataStore, user0.address)).eq(1);
+
+    // Attach an auto-cancel stop-loss carrying a callback + a real gas budget. Without the fix, the
+    // forced cleanup on close would invoke this callback (unpaid) — the grief vector.
+    await createOrder(fixture, {
+      market: ethUsdMarket,
+      initialCollateralToken: wnt,
+      initialCollateralDeltaAmount: 0,
+      sizeDeltaUsd: decimalToFloat(200 * 1000),
+      acceptablePrice: expandDecimals(4800, 12),
+      orderType: OrderType.StopLossDecrease,
+      isLong: true,
+      autoCancel: true,
+      callbackContract: mockCallbackReceiver,
+      callbackGasLimit: expandDecimals(5, 5), // 500k
+    });
+
+    expect(await getOrderCount(dataStore)).eq(1);
+    expect(await mockCallbackReceiver.called()).eq(0);
+
+    // Fully close the position with a callback on the closing order too. The closing order's OWN
+    // execution callback SHOULD fire (control: proves the callback is wired and normal execution
+    // callbacks are untouched). The auto-cancel order cleared in the same tx must NOT fire its
+    // callback (the fix) — so `called` ends at 1, not 2.
+    await handleOrder(fixture, {
+      create: {
+        market: ethUsdMarket,
+        initialCollateralToken: wnt,
+        initialCollateralDeltaAmount: 0,
+        sizeDeltaUsd: decimalToFloat(200 * 1000),
+        acceptablePrice: expandDecimals(4800, 12),
+        orderType: OrderType.MarketDecrease,
+        isLong: true,
+        callbackContract: mockCallbackReceiver,
+        callbackGasLimit: expandDecimals(5, 5), // 500k
+      },
+    });
+
+    // Position closed and the auto-cancel order was cleared (so the cleanup path definitely ran).
+    expect(await getAccountPositionCount(dataStore, user0.address)).eq(0);
+    expect(await getOrderCount(dataStore)).eq(0);
+
+    // Closing order's execution callback fired (== 1); the auto-cancel cancellation callback was
+    // suppressed. Without the fix this would be 2.
+    expect(await mockCallbackReceiver.called()).eq(1);
   });
 });

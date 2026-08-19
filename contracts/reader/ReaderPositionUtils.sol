@@ -47,12 +47,10 @@ library ReaderPositionUtils {
     }
 
     function getBorrowingFees(
-        DataStore dataStore,
         Price.Props memory collateralTokenPrice,
         uint256 borrowingFeeUsd
-    ) internal view returns (PositionPricingUtils.PositionBorrowingFees memory) {
+    ) internal pure returns (PositionPricingUtils.PositionBorrowingFees memory) {
         return PositionPricingUtils.getBorrowingFees(
-            dataStore,
             collateralTokenPrice,
             borrowingFeeUsd
         );
@@ -219,6 +217,7 @@ library ReaderPositionUtils {
             longToken: cache.market.longToken,
             shortToken: cache.market.shortToken,
             sizeDeltaUsd: sizeDeltaUsd,
+            remainingCollateralUsd: 0, // needs for liquidation fee calculation
             uiFeeReceiver: uiFeeReceiver,
             isLiquidation: false
         });
@@ -230,7 +229,6 @@ library ReaderPositionUtils {
         cache.pendingBorrowingFeeUsd = getNextBorrowingFees(dataStore, positionInfo.position, cache.market, prices);
 
         positionInfo.fees.borrowing = getBorrowingFees(
-            dataStore,
             cache.collateralTokenPrice,
             cache.pendingBorrowingFeeUsd
         );

@@ -24,6 +24,7 @@ library Errors {
 
     // CallbackUtils errors
     error MaxCallbackGasLimitExceeded(uint256 callbackGasLimit, uint256 maxCallbackGasLimit);
+    error MaxRelayFeeSwapForSubaccountExceeded(uint256 relayFeeSwapUsd);
     error InsufficientGasLeftForCallback(uint256 gasToBeForwarded, uint256 callbackGasLimit);
 
     // Config errors
@@ -33,6 +34,7 @@ library Errors {
     error OracleProviderAlreadyExistsForToken(address token);
     error PriceFeedAlreadyExistsForToken(address token);
     error DataStreamIdAlreadyExistsForToken(address token);
+    error PythLazerFeedIdAlreadyExistsForToken(address token);
     error MaxFundingFactorPerSecondLimitExceeded(uint256 maxFundingFactorPerSecond, uint256 limit);
 
     // ContributorHandler errors
@@ -49,6 +51,7 @@ library Errors {
     error SignalTimeNotYetPassed(uint256 signalTime);
     error InvalidTimelockDelay(uint256 timelockDelay);
     error MaxTimelockDelayExceeded(uint256 timelockDelay);
+    error MinTimelockDelayNotMet(uint256 timelockDelay);
     error InvalidFeeReceiver(address receiver);
     error InvalidOracleSigner(address receiver);
 
@@ -216,6 +219,7 @@ library Errors {
     error GmMinPricesNotSorted(address token, uint256 price, uint256 prevPrice);
     error GmMaxPricesNotSorted(address token, uint256 price, uint256 prevPrice);
     error EmptyChainlinkPriceFeedMultiplier(address token);
+    error EmptyChainlinkPriceFeedHeartbeat(address token);
     error EmptyDataStreamMultiplier(address token);
     error InvalidDataStreamSpreadReductionFactor(address token, uint256 spreadReductionFactor);
     error InvalidFeedPrice(address token, int256 price);
@@ -237,6 +241,14 @@ library Errors {
     error InvalidBlockRangeSet(uint256 largestMinBlockNumber, uint256 smallestMaxBlockNumber);
     error EmptyChainlinkPaymentToken();
     error NonAtomicOracleProvider(address provider);
+    error EmptyPythLazerFeedData(address token);
+    error EmptyPythLazerFeedId(address token);
+    error EmptyPythLazerFeedMultiplier(address token);
+    error InvalidPythLazerFeedExponent(address token, int256 actualExponent, int256 expectedExponent);
+    error EmptyPythHermesFeedMultiplier(address token);
+    error InvalidPythLazerScaledConfidence(address token, uint256 scaledConfidence, uint256 price);
+    error InvalidPythLazerFeedId(address token, uint256 pythLazerFeedId);
+    error StaleOraclePrice(address token, uint256 publishedTimestamp, uint256 storedTimestamp);
 
     // OracleModule errors
     error InvalidPrimaryPricesForSimulation(uint256 primaryTokensLength, uint256 primaryPricesLength);
@@ -293,12 +305,16 @@ library Errors {
         string reason,
         int256 remainingCollateralUsd,
         int256 minCollateralUsd,
-        int256 minCollateralUsdForLeverage
+        int256 requiredCollateralUsd,
+        uint256 mmr
     );
 
     // IncreasePositionUtils errors
     error InsufficientCollateralAmount(uint256 collateralAmount, int256 collateralDeltaAmount);
     error InsufficientCollateralUsd(int256 remainingCollateralUsd);
+
+    // Config.setLeverageLadder errors
+    error LeverageLadderMisconfigured();
 
     // PositionStoreUtils errors
     error PositionNotFound(bytes32 key);
@@ -308,12 +324,14 @@ library Errors {
         string reason,
         int256 remainingCollateralUsd,
         int256 minCollateralUsd,
-        int256 minCollateralUsdForLeverage
+        int256 requiredCollateralUsd,
+        uint256 mmr
     );
 
     error EmptyPosition();
     error InvalidPositionSizeValues(uint256 sizeInUsd, uint256 sizeInTokens);
     error MinPositionSize(uint256 positionSizeInUsd, uint256 minPositionSizeUsd);
+    error InvalidLeverage(uint256 currLeverage, uint256 minLeverage);
 
     // PositionPricingUtils errors
     error UsdDeltaExceedsLongOpenInterest(int256 usdDelta, uint256 longOpenInterest);
@@ -344,6 +362,7 @@ library Errors {
     error InvalidClaimCollateralInput(uint256 marketsLength, uint256 tokensLength, uint256 timeKeysLength);
     error InvalidClaimAffiliateRewardsInput(uint256 marketsLength, uint256 tokensLength);
     error InvalidClaimUiFeesInput(uint256 marketsLength, uint256 tokensLength);
+    error InvalidClaimFeesInput(uint256 marketsLength, uint256 tokensLength);
 
     // SwapUtils errors
     error InvalidTokenIn(address tokenIn, address market);
@@ -371,6 +390,10 @@ library Errors {
     // AccountUtils errors
     error EmptyAccount();
     error EmptyReceiver();
+
+    // InsuranceFund errors
+    error InsuranceFundEpochNotYetElapsed(uint256 currentTime, uint256 epochStart, uint256 epochLength);
+    error EmptyInsuranceFundAddress();
 
     // Array errors
     error CompactedArrayOutOfBounds(

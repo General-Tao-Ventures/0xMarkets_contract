@@ -11,11 +11,11 @@ import * as keys from "../../utils/keys";
 describe("Timelock", () => {
   let fixture;
   let timelockAdmin, timelockMultisig, user2, user3, signer0, signer9;
-  let timelock, dataStore, roleStore, oracleStore, wnt;
+  let timelock, dataStore, roleStore, oracleStore, eventEmitter, wnt;
 
   beforeEach(async () => {
     fixture = await deployFixture();
-    ({ timelock, dataStore, roleStore, oracleStore, wnt } = fixture.contracts);
+    ({ timelock, dataStore, roleStore, oracleStore, eventEmitter, wnt } = fixture.contracts);
     ({ user2, user3, signer0, signer9 } = fixture.accounts);
 
     timelockAdmin = fixture.accounts.user0;
@@ -61,6 +61,20 @@ describe("Timelock", () => {
     expect(await timelock.timelockDelay()).eq(1 * 24 * 60 * 60);
     await timelock.connect(timelockAdmin).increaseTimelockDelay(2 * 24 * 60 * 60);
     expect(await timelock.timelockDelay()).eq(2 * 24 * 60 * 60);
+  });
+
+  it("rejects deploying with a timelock delay below the 1 day floor", async () => {
+    const Timelock = await hre.ethers.getContractFactory("Timelock");
+    const args = [roleStore.address, dataStore.address, eventEmitter.address, oracleStore.address];
+
+    // below the floor reverts
+    await expect(Timelock.deploy(...args, 1 * 24 * 60 * 60 - 1)).to.be.revertedWithCustomError(
+      errorsContract,
+      "MinTimelockDelayNotMet"
+    );
+
+    // exactly the floor deploys
+    await Timelock.deploy(...args, 1 * 24 * 60 * 60);
   });
 
   it("addOracleSigner", async () => {
@@ -112,30 +126,6 @@ describe("Timelock", () => {
 
     expect(await oracleStore.getSignerCount()).eq(9);
     expect(await oracleStore.getSigner(0)).eq(signer9.address);
-  });
-
-  it("setFeeReceiver", async () => {
-    await expect(timelock.connect(user2).signalSetFeeReceiver(user3.address))
-      .to.be.revertedWithCustomError(errorsContract, "Unauthorized")
-      .withArgs(user2.address, "TIMELOCK_ADMIN");
-
-    await timelock.connect(timelockAdmin).signalSetFeeReceiver(user3.address);
-
-    await expect(timelock.connect(user2).setFeeReceiverAfterSignal(user3.address))
-      .to.be.revertedWithCustomError(errorsContract, "Unauthorized")
-      .withArgs(user2.address, "TIMELOCK_ADMIN");
-
-    await expect(
-      timelock.connect(timelockAdmin).setFeeReceiverAfterSignal(user3.address)
-    ).to.be.revertedWithCustomError(errorsContract, "SignalTimeNotYetPassed");
-
-    await time.increase(1 * 24 * 60 * 60 + 10);
-
-    expect(await dataStore.getAddress(keys.FEE_RECEIVER)).eq(ethers.constants.AddressZero);
-
-    await timelock.connect(timelockAdmin).setFeeReceiverAfterSignal(user3.address);
-
-    expect(await dataStore.getAddress(keys.FEE_RECEIVER)).eq(user3.address);
   });
 
   it("grantRole", async () => {
@@ -272,7 +262,7 @@ describe("Timelock", () => {
     const p99 = percentageToFloat("99%");
 
     await expect(
-      timelock.connect(user2).signalSetDataStream(wnt.address, hashString("WNT"), expandDecimals(1, 34), p99)
+      timelock.connect(user2).signalSetDataStream(wnt.address, hashString("WNT"), false, expandDecimals(1, 34), p99)
     )
       .to.be.revertedWithCustomError(errorsContract, "Unauthorized")
       .withArgs(user2.address, "TIMELOCK_ADMIN");
@@ -280,21 +270,25 @@ describe("Timelock", () => {
     await expect(
       timelock
         .connect(timelockAdmin)
-        .signalSetDataStream(wnt.address, hashString("WNT"), expandDecimals(1, 34), percentageToFloat("101%"))
+        .signalSetDataStream(wnt.address, hashString("WNT"), false, expandDecimals(1, 34), percentageToFloat("101%"))
     ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
 
     await timelock
       .connect(timelockAdmin)
-      .signalSetDataStream(wnt.address, hashString("WNT"), expandDecimals(1, 34), p99);
+      .signalSetDataStream(wnt.address, hashString("WNT"), false, expandDecimals(1, 34), p99);
 
     await expect(
-      timelock.connect(user2).setDataStreamAfterSignal(wnt.address, hashString("WNT"), expandDecimals(1, 34), p99)
+      timelock
+        .connect(user2)
+        .setDataStreamAfterSignal(wnt.address, hashString("WNT"), false, expandDecimals(1, 34), p99)
     )
       .to.be.revertedWithCustomError(errorsContract, "Unauthorized")
       .withArgs(user2.address, "TIMELOCK_ADMIN");
 
     await expect(
-      timelock.connect(user2).setDataStreamAfterSignal(wnt.address, hashString("WNT"), expandDecimals(1, 34), p99)
+      timelock
+        .connect(user2)
+        .setDataStreamAfterSignal(wnt.address, hashString("WNT"), false, expandDecimals(1, 34), p99)
     )
       .to.be.revertedWithCustomError(errorsContract, "Unauthorized")
       .withArgs(user2.address, "TIMELOCK_ADMIN");
@@ -302,20 +296,22 @@ describe("Timelock", () => {
     await expect(
       timelock
         .connect(timelockAdmin)
-        .setDataStreamAfterSignal(wnt.address, hashString("WNT"), expandDecimals(1, 34), p99)
+        .setDataStreamAfterSignal(wnt.address, hashString("WNT"), false, expandDecimals(1, 34), p99)
     ).to.be.revertedWithCustomError(errorsContract, "SignalTimeNotYetPassed");
 
     await time.increase(1 * 24 * 60 * 60 + 10);
 
     expect(await dataStore.getBytes32(keys.dataStreamIdKey(wnt.address))).eq(ethers.constants.HashZero);
+    expect(await dataStore.getBool(keys.dataStreamInvertedKey(wnt.address))).eq(false);
     expect(await dataStore.getUint(keys.dataStreamMultiplierKey(wnt.address))).eq(0);
     expect(await dataStore.getUint(keys.dataStreamSpreadReductionFactorKey(wnt.address))).eq(0);
 
     await timelock
       .connect(timelockAdmin)
-      .setDataStreamAfterSignal(wnt.address, hashString("WNT"), expandDecimals(1, 34), p99);
+      .setDataStreamAfterSignal(wnt.address, hashString("WNT"), false, expandDecimals(1, 34), p99);
 
     expect(await dataStore.getBytes32(keys.dataStreamIdKey(wnt.address))).eq(hashString("WNT"));
+    expect(await dataStore.getBool(keys.dataStreamInvertedKey(wnt.address))).eq(false);
     expect(await dataStore.getUint(keys.dataStreamMultiplierKey(wnt.address))).eq(expandDecimals(1, 34));
     expect(await dataStore.getUint(keys.dataStreamSpreadReductionFactorKey(wnt.address))).eq(p99);
   });

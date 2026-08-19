@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 
 import "../data/DataStore.sol";
 import "../event/EventEmitter.sol";
+import "../market/MarketCollateralUtils.sol";
 
 import "../oracle/Oracle.sol";
 import "../pricing/PositionPricingUtils.sol";
@@ -11,6 +12,7 @@ import "../pricing/PositionPricingUtils.sol";
 import "./Position.sol";
 import "./PositionStoreUtils.sol";
 import "./PositionUtils.sol";
+import "./PositionExecutionPriceUtils.sol";
 import "./PositionEventUtils.sol";
 
 // @title IncreasePositionUtils
@@ -99,7 +101,7 @@ library IncreasePositionUtils {
             );
         }
 
-        (cache.priceImpactUsd, cache.priceImpactAmount, cache.sizeDeltaInTokens, cache.executionPrice) = PositionUtils.getExecutionPriceForIncrease(params, prices.indexTokenPrice);
+        (cache.priceImpactUsd, cache.priceImpactAmount, cache.sizeDeltaInTokens, cache.executionPrice) = PositionExecutionPriceUtils.getExecutionPriceForIncrease(params, prices.indexTokenPrice);
 
         // process the collateral for the given position and order
         PositionPricingUtils.PositionFees memory fees;
@@ -178,7 +180,10 @@ library IncreasePositionUtils {
                 prices,
                 params.order.isLong()
             );
+        }
 
+
+        {
             PositionUtils.WillPositionCollateralBeSufficientValues memory positionValues = PositionUtils.WillPositionCollateralBeSufficientValues(
                 params.position.sizeInUsd(), // positionSizeInUsd
                 params.position.collateralAmount(), // positionCollateralAmount
@@ -211,7 +216,10 @@ library IncreasePositionUtils {
             params.market,
             prices,
             true, // shouldValidateMinPositionSize
-            true // shouldValidateMinCollateralUsd
+            true, // shouldValidateMinCollateralUsd
+            // shouldValidateMinLeverage: only when size actually increases. A collateral-only top-up
+            // (sizeDeltaUsd == 0) lowers leverage toward safety and must not trip the floor.
+            params.order.sizeDeltaUsd() > 0
         );
 
         PositionEventUtils.emitPositionFeesCollected(
@@ -263,39 +271,37 @@ library IncreasePositionUtils {
             params.market.longToken, // longToken
             params.market.shortToken, // shortToken
             params.order.sizeDeltaUsd(), // sizeDeltaUsd
+            0, // remainingCollateralUsd, needs for liquidation fee calculation
             params.order.uiFeeReceiver(), // uiFeeReceiver
             false // isLiquidation
         );
 
         PositionPricingUtils.PositionFees memory fees = PositionPricingUtils.getPositionFees(getPositionFeesParams);
 
-        FeeUtils.incrementClaimableFeeAmount(
-            params.contracts.dataStore,
-            params.contracts.eventEmitter,
-            params.market.marketToken,
-            params.position.collateralToken(),
-            fees.feeReceiverAmount,
-            Keys.POSITION_FEE_TYPE
-        );
+        address collateralToken = params.position.collateralToken();
+
+        _distributeTransactionShares(params, fees, collateralToken);
 
         FeeUtils.incrementClaimableUiFeeAmount(
             params.contracts.dataStore,
             params.contracts.eventEmitter,
             params.order.uiFeeReceiver(),
             params.market.marketToken,
-            params.position.collateralToken(),
+            collateralToken,
             fees.ui.uiFeeAmount,
             Keys.UI_POSITION_FEE_TYPE
         );
 
         collateralDeltaAmount -= fees.totalCostAmount.toInt256();
 
-        MarketUtils.applyDeltaToCollateralSum(
+        bool isLong = params.order.isLong();
+
+        MarketCollateralUtils.applyDeltaToCollateralSum(
             params.contracts.dataStore,
             params.contracts.eventEmitter,
             params.order.market(),
-            params.position.collateralToken(),
-            params.order.isLong(),
+            collateralToken,
+            isLong,
             collateralDeltaAmount
         );
 
@@ -303,10 +309,55 @@ library IncreasePositionUtils {
             params.contracts.dataStore,
             params.contracts.eventEmitter,
             params.market,
-            params.position.collateralToken(),
+            collateralToken,
             fees.feeAmountForPool.toInt256()
         );
 
         return (collateralDeltaAmount, fees);
+    }
+
+    function _distributeTransactionShares(
+        PositionUtils.UpdatePositionParams memory params,
+        PositionPricingUtils.PositionFees memory fees,
+        address collateralToken
+    ) internal {
+        address veAlphaFeeReceiver = params.contracts.dataStore.getAddress(Keys.VEALPHA_FEE_RECEIVER);
+        if (veAlphaFeeReceiver != address(0)) {
+            FeeUtils.incrementClaimableFeeAmount(
+                params.contracts.dataStore,
+                params.contracts.eventEmitter,
+                veAlphaFeeReceiver,
+                params.market.marketToken,
+                collateralToken,
+                fees.veAlphaFeeAmount,
+                Keys.POSITION_FEE_TYPE
+            );
+        }
+
+        address treasuryFeeReceiver = params.contracts.dataStore.getAddress(Keys.TREASURY_FEE_RECEIVER);
+        if (treasuryFeeReceiver != address(0)) {
+            FeeUtils.incrementClaimableFeeAmount(
+                params.contracts.dataStore,
+                params.contracts.eventEmitter,
+                treasuryFeeReceiver,
+                params.market.marketToken,
+                collateralToken,
+                fees.treasuryFeeAmount,
+                Keys.POSITION_FEE_TYPE
+            );
+        }
+
+        address buybackFeeReceiver = params.contracts.dataStore.getAddress(Keys.BUYBACK_FEE_RECEIVER);
+        if (buybackFeeReceiver != address(0)) {
+            FeeUtils.incrementClaimableFeeAmount(
+                params.contracts.dataStore,
+                params.contracts.eventEmitter,
+                buybackFeeReceiver,
+                params.market.marketToken,
+                collateralToken,
+                fees.buybackFeeAmount,
+                Keys.POSITION_FEE_TYPE
+            );
+        }
     }
 }

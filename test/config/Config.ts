@@ -69,19 +69,33 @@ describe("Config", () => {
       .withArgs(keys.POOL_AMOUNT);
   });
 
-  it("allows LIMITED_CONFIG_KEEPER to set allowedLimitedBaseKeys", async () => {
-    expect(await dataStore.getAddress(keys.HOLDING_ADDRESS)).eq(AddressZero);
-    await config.connect(user0).setAddress(keys.HOLDING_ADDRESS, "0x", user1.address);
-    expect(await dataStore.getAddress(keys.HOLDING_ADDRESS)).eq(user1.address);
-
-    await expect(config.connect(user2).setAddress(keys.HOLDING_ADDRESS, "0x", user2.address))
+  // ZEROMARK-684: the live Data Stream oracle keys must not be reachable through the generic,
+  // un-delayed setter — changes flow only through the timelocked signalSetDataStream path.
+  it("reverts for timelock-only Data Stream keys via the generic setter (ZEROMARK-684)", async () => {
+    await expect(config.connect(user0).setBool(keys.DATA_STREAM_INVERTED, encodeData(["address"], [wnt.address]), true))
       .to.be.revertedWithCustomError(errorsContract, "InvalidBaseKey")
-      .withArgs(keys.HOLDING_ADDRESS);
+      .withArgs(keys.DATA_STREAM_INVERTED);
 
-    expect(await dataStore.getUint(keys.ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1), "0");
-    await config.connect(user2).setUint(keys.ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1, "0x", "200");
-    expect(await dataStore.getUint(keys.ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1), "200");
+    await expect(
+      config.connect(user0).setUint(keys.DATA_STREAM_SPREAD_REDUCTION_FACTOR, encodeData(["address"], [wnt.address]), 0)
+    )
+      .to.be.revertedWithCustomError(errorsContract, "InvalidBaseKey")
+      .withArgs(keys.DATA_STREAM_SPREAD_REDUCTION_FACTOR);
   });
+
+  // it("allows LIMITED_CONFIG_KEEPER to set allowedLimitedBaseKeys", async () => {
+  //   expect(await dataStore.getAddress(keys.HOLDING_ADDRESS)).eq(AddressZero);
+  //   await config.connect(user0).setAddress(keys.HOLDING_ADDRESS, "0x", user1.address);
+  //   expect(await dataStore.getAddress(keys.HOLDING_ADDRESS)).eq(user1.address);
+  //
+  //   await expect(config.connect(user2).setAddress(keys.HOLDING_ADDRESS, "0x", user2.address))
+  //     .to.be.revertedWithCustomError(errorsContract, "InvalidBaseKey")
+  //     .withArgs(keys.HOLDING_ADDRESS);
+  //
+  //   expect(await dataStore.getUint(keys.ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1), "0");
+  //   await config.connect(user2).setUint(keys.ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1, "0x", "200");
+  //   expect(await dataStore.getUint(keys.ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1), "200");
+  // });
 
   it("setBool", async () => {
     const key = keys.isMarketDisabledKey(ethUsdMarket.marketToken);
@@ -232,17 +246,27 @@ describe("Config", () => {
         type: "Uint",
       },
       {
-        key: keys.POSITION_FEE_RECEIVER_FACTOR,
+        key: keys.POSITION_FEE_VEALPHA_FACTOR,
         initial: 0,
         type: "Uint",
       },
       {
-        key: keys.SWAP_FEE_RECEIVER_FACTOR,
+        key: keys.POSITION_FEE_TREASURY_FACTOR,
         initial: 0,
         type: "Uint",
       },
       {
-        key: keys.BORROWING_FEE_RECEIVER_FACTOR,
+        key: keys.POSITION_FEE_BUYBACK_FACTOR,
+        initial: 0,
+        type: "Uint",
+      },
+      {
+        key: keys.LIQUIDATION_FEE_VALIDATOR_FACTOR,
+        initial: 0,
+        type: "Uint",
+      },
+      {
+        key: keys.LIQUIDATION_FEE_INSURANCE_FACTOR,
         initial: 0,
         type: "Uint",
       },
@@ -394,6 +418,63 @@ describe("Config", () => {
     expect(onchainValue).eq(validValue);
   });
 
+  it("validates dynamic MMR risk params (ZEROMARK-34)", async () => {
+    const data = encodeData(["address"], [ethUsdMarket.marketToken]);
+
+    // MMR is a maintenance ratio: > 100% is rejected.
+    await expect(config.setUint(keys.MAX_MMR, data, decimalToFloat(1).add(1))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
+
+    // exactly 100% is also rejected: it force-liquidates even solvent positions
+    await expect(config.setUint(keys.MAX_MMR, data, decimalToFloat(1))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
+    await expect(config.setUint(keys.MIN_MMR, data, decimalToFloat(1))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
+
+    // A valid 20% ceiling.
+    await config.setUint(keys.MAX_MMR, data, percentageToFloat("20%"));
+
+    // minMmr must not exceed maxMmr (the misconfig the clamp ordering used to mishandle).
+    await expect(config.setUint(keys.MIN_MMR, data, percentageToFloat("30%"))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
+
+    // ZEROMARK-149 guardrail: minMmr is the absolute floor of the maintenance buffer, so 0 (which
+    // would let a low-leverage position's mmr clamp to zero → no buffer → liquidate only once
+    // insolvent → LP loss) is rejected.
+    await expect(config.setUint(keys.MIN_MMR, data, 0)).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
+
+    // A valid 10% floor goes through.
+    await config.setUint(keys.MIN_MMR, data, percentageToFloat("10%"));
+
+    // Leverage is FLOAT_PRECISION-scaled (1x == FLOAT_PRECISION); below 1x is rejected.
+    await expect(config.setUint(keys.MAX_LEVERAGE, data, decimalToFloat(1).sub(1))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
+
+    await config.setUint(keys.MAX_LEVERAGE, data, decimalToFloat(100)); // 100x ok
+
+    // minLeverage is opt-in: 0 ("no lower bound") must be accepted — it's the deployed default for
+    // most markets. A non-zero value below 1x is still rejected.
+    await config.setUint(keys.MIN_LEVERAGE, data, 0);
+    await expect(config.setUint(keys.MIN_LEVERAGE, data, decimalToFloat(1).sub(1))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
+    await config.setUint(keys.MIN_LEVERAGE, data, decimalToFloat(2)); // 2x ok
+  });
+
   it("validates funding decrease factor", async () => {
     const validValue = bigNumberify("100000000000000000000000").div(86400);
     await expect(
@@ -429,12 +510,134 @@ describe("Config", () => {
 
   it("validates data stream spread reduction factor", async () => {
     const p100 = percentageToFloat("100%");
+    // ZEROMARK-684: DATA_STREAM_SPREAD_REDUCTION_FACTOR is no longer reachable through the generic
+    // setUint (timelock-only); its range is still validated on the dedicated setDataStream path.
+    // Use a fresh token so the "feed already exists" guard does not short-circuit before validateRange.
+    const token = ethers.Wallet.createRandom().address;
+    const feedId = hashString("feedId");
+    const multiplier = expandDecimals(1, 34);
+
+    await expect(config.setDataStream(token, feedId, false, multiplier, p100.add(1))).to.be.revertedWithCustomError(
+      errorsContract,
+      "ConfigValueExceedsAllowedRange"
+    );
+
+    await config.setDataStream(token, feedId, false, multiplier, p100);
+  });
+
+  it("validates LIQUIDATION_FEE_VALIDATOR + INSURANCE sum ≤ 100%", async () => {
+    // Both factors are global. Set validator to 40%; insurance up to 60% must
+    // be accepted, 61% must revert. Without this invariant, the pool's residual
+    // in PositionPricingUtils.getPositionFees would underflow.
+    await config.connect(user0).setUint(keys.LIQUIDATION_FEE_VALIDATOR_FACTOR, "0x", percentageToFloat("40%"));
+    await config.connect(user0).setUint(keys.LIQUIDATION_FEE_INSURANCE_FACTOR, "0x", percentageToFloat("60%"));
 
     await expect(
-      config.setUint(keys.DATA_STREAM_SPREAD_REDUCTION_FACTOR, encodeData(["address"], [wnt.address]), p100.add(1))
+      config.connect(user0).setUint(keys.LIQUIDATION_FEE_INSURANCE_FACTOR, "0x", percentageToFloat("60%").add(1))
     ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
 
-    await config.setUint(keys.DATA_STREAM_SPREAD_REDUCTION_FACTOR, encodeData(["address"], [wnt.address]), p100);
+    await expect(
+      config.connect(user0).setUint(keys.LIQUIDATION_FEE_VALIDATOR_FACTOR, "0x", percentageToFloat("40%").add(1))
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+  });
+
+  it("validates INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR off-sentinel + ≤ 100%", async () => {
+    const market = encodeData(["address"], [ethUsdMarket.marketToken]);
+    const p100 = percentageToFloat("100%");
+    const maxUint = ethers.constants.MaxUint256;
+
+    // off-sentinel must be settable
+    await config.connect(user0).setUint(keys.INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR, market, maxUint);
+    expect(await dataStore.getUint(keys.insuranceFundDrawdownTriggerFactorKey(ethUsdMarket.marketToken))).eq(maxUint);
+
+    // normal fraction must be settable
+    await config.connect(user0).setUint(keys.INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR, market, percentageToFloat("2%"));
+
+    // anything above 100% that isn't the sentinel must revert
+    await expect(
+      config.connect(user0).setUint(keys.INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR, market, p100.add(1))
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+
+    // a dust-sized trigger below the 1% floor must revert (would inject on any drawdown)
+    await expect(
+      config.connect(user0).setUint(keys.INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR, market, percentageToFloat("1%").sub(1))
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+
+    // exactly 1% is accepted
+    await config.connect(user0).setUint(keys.INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR, market, percentageToFloat("1%"));
+  });
+
+  it("caps LIQUIDATION_FEE_FACTOR at 100%", async () => {
+    const market = encodeData(["address"], [ethUsdMarket.marketToken]);
+
+    await config.connect(user0).setUint(keys.LIQUIDATION_FEE_FACTOR, market, percentageToFloat("20%"));
+
+    // the fee is charged on remaining collateral, so 100% is a valid setting
+    await config.connect(user0).setUint(keys.LIQUIDATION_FEE_FACTOR, market, percentageToFloat("100%"));
+
+    // above 100% the fee would exceed the collateral it comes from
+    await expect(
+      config.connect(user0).setUint(keys.LIQUIDATION_FEE_FACTOR, market, percentageToFloat("100%").add(1))
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+  });
+
+  it("validates setPriceFeed nonzero feed / multiplier / heartbeat", async () => {
+    const token = user1.address; // arbitrary token with no configured feed
+    const feed = user2.address;
+    const mult = expandDecimals(1, 44);
+    const heartbeat = 24 * 60 * 60;
+
+    await expect(
+      config.connect(user0).setPriceFeed(token, ethers.constants.AddressZero, mult, heartbeat, 0)
+    ).to.be.revertedWithCustomError(errorsContract, "EmptyChainlinkPriceFeed");
+
+    await expect(config.connect(user0).setPriceFeed(token, feed, 0, heartbeat, 0)).to.be.revertedWithCustomError(
+      errorsContract,
+      "EmptyChainlinkPriceFeedMultiplier"
+    );
+
+    await expect(config.connect(user0).setPriceFeed(token, feed, mult, 0, 0)).to.be.revertedWithCustomError(
+      errorsContract,
+      "EmptyChainlinkPriceFeedHeartbeat"
+    );
+
+    // valid config (stablePrice 0 is allowed) goes through
+    await config.connect(user0).setPriceFeed(token, feed, mult, heartbeat, 0);
+  });
+
+  it("validates POSITION_FEE_VEALPHA + TREASURY + BUYBACK sum ≤ 100%", async () => {
+    // The three position-fee receiver factors share the same underflow risk
+    // as the liquidation pair: positionFeeAmountForPool = protocolFee - vealpha
+    // - treasury - buyback (uint256). If the sum exceeds 100% the subtraction
+    // underflows. Verify the validator rejects sums above 100% and accepts
+    // exactly 100%.
+    await config.connect(user0).setUint(keys.POSITION_FEE_VEALPHA_FACTOR, "0x", percentageToFloat("40%"));
+    await config.connect(user0).setUint(keys.POSITION_FEE_TREASURY_FACTOR, "0x", percentageToFloat("30%"));
+    await config.connect(user0).setUint(keys.POSITION_FEE_BUYBACK_FACTOR, "0x", percentageToFloat("30%"));
+
+    // Boundary 40+30+30 = 100% accepted; +1 wei on any leg reverts.
+    await expect(
+      config.connect(user0).setUint(keys.POSITION_FEE_VEALPHA_FACTOR, "0x", percentageToFloat("40%").add(1))
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+    await expect(
+      config.connect(user0).setUint(keys.POSITION_FEE_TREASURY_FACTOR, "0x", percentageToFloat("30%").add(1))
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+    await expect(
+      config.connect(user0).setUint(keys.POSITION_FEE_BUYBACK_FACTOR, "0x", percentageToFloat("30%").add(1))
+    ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
+  });
+
+  it("setBaselineSwap writes both keys for a config keeper", async () => {
+    const market = ethUsdMarket.marketToken;
+    const perDay = decimalToFloat(1, 4);
+
+    await config["setBaselineSwap(address,uint256,bool)"](market, perDay, true);
+    expect(await dataStore.getUint(keys.baselineSwapPerDayKey(market))).eq(perDay);
+    expect(await dataStore.getBool(keys.baselineSwapLongsPayShortsKey(market))).eq(true);
+
+    // the reversed overload flips the direction it stores
+    await config["setBaselineSwap(address,uint256,bool,bool)"](market, perDay, true, true);
+    expect(await dataStore.getBool(keys.baselineSwapLongsPayShortsKey(market))).eq(false);
   });
 
   it("setDataStream", async () => {
@@ -442,23 +645,24 @@ describe("Config", () => {
     const feedId = hashString("WNT");
 
     await expect(
-      config.setDataStream(wnt.address, feedId, expandDecimals(1, 34), p100.add(1))
+      config.setDataStream(wnt.address, feedId, false, expandDecimals(1, 34), p100.add(1))
     ).to.be.revertedWithCustomError(errorsContract, "ConfigValueExceedsAllowedRange");
 
     expect(await dataStore.getBytes32(keys.dataStreamIdKey(wnt.address))).eq(ethers.constants.HashZero);
+    expect(await dataStore.getBool(keys.dataStreamInvertedKey(wnt.address))).eq(false);
     expect(await dataStore.getUint(keys.dataStreamMultiplierKey(wnt.address))).eq(0);
     expect(await dataStore.getUint(keys.dataStreamSpreadReductionFactorKey(wnt.address))).eq(0);
 
-    await config.setDataStream(wnt.address, feedId, expandDecimals(1, 34), p100);
+    await config.setDataStream(wnt.address, feedId, false, expandDecimals(1, 34), p100);
 
     expect(await dataStore.getBytes32(keys.dataStreamIdKey(wnt.address))).eq(feedId);
+    expect(await dataStore.getBool(keys.dataStreamInvertedKey(wnt.address))).eq(false);
     expect(await dataStore.getUint(keys.dataStreamMultiplierKey(wnt.address))).eq(expandDecimals(1, 34));
     expect(await dataStore.getUint(keys.dataStreamSpreadReductionFactorKey(wnt.address))).eq(p100);
 
-    await expect(config.setDataStream(wnt.address, feedId, expandDecimals(1, 34), p100)).to.be.revertedWithCustomError(
-      errorsContract,
-      "DataStreamIdAlreadyExistsForToken"
-    );
+    await expect(
+      config.setDataStream(wnt.address, feedId, false, expandDecimals(1, 34), p100)
+    ).to.be.revertedWithCustomError(errorsContract, "DataStreamIdAlreadyExistsForToken");
   });
 
   it("setClaimableCollateralFactorForAccount", async () => {

@@ -6,7 +6,6 @@ import "../position/PositionStoreUtils.sol";
 import "../order/OrderStoreUtils.sol";
 import "../order/OrderEventUtils.sol";
 import "../nonce/NonceUtils.sol";
-import "../callback/CallbackUtils.sol";
 
 // @title LiquidationUtils
 // @dev Library to help with liquidations
@@ -35,7 +34,10 @@ library LiquidationUtils {
             account, // account
             account, // receiver
             account, // cancellationReceiver
-            CallbackUtils.getSavedCallbackContract(dataStore, account, market), // callbackContract
+            // Forced liquidations must NOT inherit the trader's saved callback: this order is built with
+            // executionFee == 0 and MAX_CALLBACK_GAS_LIMIT, so an inherited callback would let a trader
+            // dump unpaid callback gas onto the keeper during their own forced close (gas grief).
+            address(0), // callbackContract
             address(0), // uiFeeReceiver
             market, // market
             position.collateralToken(), // initialCollateralToken
@@ -67,7 +69,7 @@ library LiquidationUtils {
             0, // triggerPrice
             position.isLong() ? 0 : type(uint256).max, // acceptablePrice
             0, // executionFee
-            dataStore.getUint(Keys.MAX_CALLBACK_GAS_LIMIT), // callbackGasLimit
+            0, // callbackGasLimit (no callback on forced liquidations)
             0, // minOutputAmount
             Chain.currentTimestamp(), // updatedAtTime
             0 // validFromTime

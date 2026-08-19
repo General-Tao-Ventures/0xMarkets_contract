@@ -6,6 +6,8 @@ import "./BaseHandler.sol";
 import "../error/ErrorUtils.sol";
 
 import "../market/Market.sol";
+import "../market/MarketUtils.sol";
+
 
 import "../withdrawal/Withdrawal.sol";
 import "../withdrawal/WithdrawalVault.sol";
@@ -37,9 +39,16 @@ contract WithdrawalHandler is IWithdrawalHandler, BaseHandler {
     // @param params WithdrawalUtils.CreateWithdrawalParams
     function createWithdrawal(
         address account,
-        WithdrawalUtils.CreateWithdrawalParams calldata params
+        WithdrawalUtils.CreateWithdrawalParams memory params
     ) external override globalNonReentrant onlyController returns (bytes32) {
         FeatureUtils.validateFeature(dataStore, Keys.createWithdrawalFeatureDisabledKey(address(this)));
+
+        Market.Props memory market = MarketUtils.getEnabledMarket(dataStore, params.market);
+
+        if (market.reversed) {
+            (params.minLongTokenAmount, params.minShortTokenAmount) =
+                (params.minShortTokenAmount, params.minLongTokenAmount);
+        }
 
         return WithdrawalUtils.createWithdrawal(
             dataStore,
@@ -198,7 +207,13 @@ contract WithdrawalHandler is IWithdrawalHandler, BaseHandler {
     ) external onlySelf {
         uint256 startingGas = gasleft();
 
-        FeatureUtils.validateFeature(dataStore, Keys.executeWithdrawalFeatureDisabledKey(address(this)));
+        // Gate each mode on its own feature flag so disabling normal withdrawals does not also block
+        // the atomic exit path (and vice versa); the atomic entrypoint already validated its flag.
+        if (swapPricingType == ISwapPricingUtils.SwapPricingType.AtomicWithdrawal) {
+            FeatureUtils.validateFeature(dataStore, Keys.executeAtomicWithdrawalFeatureDisabledKey(address(this)));
+        } else {
+            FeatureUtils.validateFeature(dataStore, Keys.executeWithdrawalFeatureDisabledKey(address(this)));
+        }
 
         ExecuteWithdrawalUtils.ExecuteWithdrawalParams memory params = ExecuteWithdrawalUtils.ExecuteWithdrawalParams(
             dataStore,

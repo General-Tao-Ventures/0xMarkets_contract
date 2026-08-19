@@ -2,14 +2,14 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts-v4/token/ERC20/ERC20.sol";
 import "../bank/Bank.sol";
 
 // @title MarketToken
 // @dev The market token for a market, stores funds for the market and keeps track
 // of the liquidity owners
 contract MarketToken is ERC20, Bank {
-    constructor(RoleStore _roleStore, DataStore _dataStore) ERC20("GMX Market", "GM") Bank(_roleStore, _dataStore) {
+    constructor(RoleStore _roleStore, DataStore _dataStore) ERC20("0xMarkets Pool", "0xM") Bank(_roleStore, _dataStore) {
     }
 
     // @dev mint market tokens to an account

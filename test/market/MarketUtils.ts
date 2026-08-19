@@ -86,4 +86,150 @@ describe("MarketUtils", () => {
     expect(maxOpenInterest).eq(decimalToFloat(400_000));
     expect(usageFactor).eq(percentageToFloat("8%"));
   });
+
+  describe("getDynamicMmr", () => {
+    // Market config used for every case below:
+    //   max_leverage = 100x       min_leverage = 1x
+    //   min_mmr      = 0.3%       max_mmr      = 10%       mmr_tuning = 0.5%
+    //
+    // rawMmr = (currLev / maxLev) * tuning, clamped to [min_mmr, max_mmr]
+    const setMmrParams = async (marketToken, cfg) => {
+      await dataStore.setUint(keys.maxLeverageKey(marketToken), cfg.maxLeverage);
+      await dataStore.setUint(keys.minLeverageKey(marketToken), cfg.minLeverage);
+      await dataStore.setUint(keys.minMmrKey(marketToken), cfg.minMmr);
+      await dataStore.setUint(keys.maxMmrKey(marketToken), cfg.maxMmr);
+      await dataStore.setUint(keys.mmrTuningKey(marketToken), cfg.mmrTuning);
+    };
+
+    const cryptoCfg = {
+      maxLeverage: decimalToFloat(100),
+      minLeverage: decimalToFloat(1),
+      minMmr: percentageToFloat("0.3%"),
+      maxMmr: percentageToFloat("10%"),
+      mmrTuning: percentageToFloat("0.5%"),
+    };
+
+    it("returns min_mmr when collateralUsd is 0 (transient fee-deduction state)", async () => {
+      // Zero collateral can occur mid-decrease when fees eat the entire position
+      // collateral but positive PnL still covers costs. Returning min_mmr allows
+      // validatePosition to pass when PnL covers the minimum buffer.
+      const marketUtilsTest = await deployContract("MarketUtilsTest", []);
+      await setMmrParams(ethUsdMarket.marketToken, cryptoCfg);
+
+      const mmr = await marketUtilsTest.getDynamicMmr(
+        dataStore.address,
+        ethUsdMarket.marketToken,
+        decimalToFloat(1_000_000), // $1M size
+        0
+      );
+      expect(mmr).eq(cryptoCfg.minMmr);
+    });
+
+    it("returns max_mmr when max_leverage is 0 (misconfiguration defensive)", async () => {
+      const marketUtilsTest = await deployContract("MarketUtilsTest", []);
+      await setMmrParams(ethUsdMarket.marketToken, { ...cryptoCfg, maxLeverage: 0 });
+
+      const mmr = await marketUtilsTest.getDynamicMmr(
+        dataStore.address,
+        ethUsdMarket.marketToken,
+        decimalToFloat(1_000_000),
+        decimalToFloat(20_000)
+      );
+      expect(mmr).eq(cryptoCfg.maxMmr);
+    });
+
+    it("floors at min_mmr for low-leverage positions", async () => {
+      const marketUtilsTest = await deployContract("MarketUtilsTest", []);
+      await setMmrParams(ethUsdMarket.marketToken, cryptoCfg);
+
+      // 10x leverage ($1M notional / $100k collateral)
+      // raw = (10/100) * 0.5% = 0.05% → clamped UP to min_mmr = 0.3%
+      const mmr = await marketUtilsTest.getDynamicMmr(
+        dataStore.address,
+        ethUsdMarket.marketToken,
+        decimalToFloat(1_000_000),
+        decimalToFloat(100_000)
+      );
+      expect(mmr).eq(cryptoCfg.minMmr);
+    });
+
+    it("equals mmr_tuning at max_leverage (curve endpoint)", async () => {
+      const marketUtilsTest = await deployContract("MarketUtilsTest", []);
+      await setMmrParams(ethUsdMarket.marketToken, cryptoCfg);
+
+      // 100x leverage ($1M notional / $10k collateral) → currLev == maxLev
+      // raw = (100/100) * 0.5% = 0.5% = mmr_tuning
+      // not clamped (0.3% ≤ 0.5% ≤ 10%)
+      const mmr = await marketUtilsTest.getDynamicMmr(
+        dataStore.address,
+        ethUsdMarket.marketToken,
+        decimalToFloat(1_000_000),
+        decimalToFloat(10_000)
+      );
+      expect(mmr).eq(cryptoCfg.mmrTuning);
+    });
+
+    it("scales linearly between floor and endpoint", async () => {
+      const marketUtilsTest = await deployContract("MarketUtilsTest", []);
+      // Push min_mmr to 0 so we can see raw scaling without the floor clamp
+      await setMmrParams(ethUsdMarket.marketToken, { ...cryptoCfg, minMmr: 0 });
+
+      // 75x leverage: raw = (75/100) * 0.5% = 0.375%
+      const mmr = await marketUtilsTest.getDynamicMmr(
+        dataStore.address,
+        ethUsdMarket.marketToken,
+        decimalToFloat(1_000_000),
+        decimalToFloat(1_000_000).div(75)
+      );
+      // Expect ~0.375% (allow tiny rounding)
+      const expected = percentageToFloat("0.375%");
+      const diff = mmr.sub(expected).abs();
+      expect(diff).lt(expandDecimals(1, 20)); // < 1e20 (negligible vs 1e30)
+    });
+
+    it("caps at max_mmr when tuning pushes rawMmr above max_mmr", async () => {
+      const marketUtilsTest = await deployContract("MarketUtilsTest", []);
+      // Intentional overshoot: tuning=20% > max_mmr=10%
+      await setMmrParams(ethUsdMarket.marketToken, {
+        ...cryptoCfg,
+        mmrTuning: percentageToFloat("20%"),
+      });
+
+      // At 100x (== maxLev), raw = 20%, clamped DOWN to max_mmr = 10%
+      const mmr = await marketUtilsTest.getDynamicMmr(
+        dataStore.address,
+        ethUsdMarket.marketToken,
+        decimalToFloat(1_000_000),
+        decimalToFloat(10_000)
+      );
+      expect(mmr).eq(cryptoCfg.maxMmr);
+    });
+
+    // ZEROMARK-284: the dynamic MMR must be computed against the leverage-ladder cap for the
+    // position's notional, not the global market max. A position opened under a tighter tier was
+    // otherwise maintained as if it were allowed the global max, giving it too small a buffer.
+    it("uses the leverage-ladder cap for the notional, not the global max (ZEROMARK-284)", async () => {
+      const marketUtilsTest = await deployContract("MarketUtilsTest", []);
+      await setMmrParams(ethUsdMarket.marketToken, cryptoCfg); // global max = 100x
+
+      // Configure a single-tier ladder capping this notional at 50x (half the global max).
+      await dataStore.setUint(keys.leverageLadderTierCountKey(ethUsdMarket.marketToken), 1);
+      await dataStore.setUint(
+        keys.leverageLadderMaxNotionalKey(ethUsdMarket.marketToken, 0),
+        decimalToFloat(1_000_000)
+      );
+      await dataStore.setUint(keys.leverageLadderMaxLeverageKey(ethUsdMarket.marketToken, 0), decimalToFloat(50));
+
+      // $1M / $10k = 100x. Without the ladder this equals the global max → raw = tuning = 0.5%
+      // (proven by the "equals mmr_tuning at max_leverage" case above). With the 50x ladder cap the
+      // effective leverage ratio doubles: raw = (100/50) * 0.5% = 1.0% (not clamped, 0.3% ≤ 1% ≤ 10%).
+      const mmr = await marketUtilsTest.getDynamicMmr(
+        dataStore.address,
+        ethUsdMarket.marketToken,
+        decimalToFloat(1_000_000),
+        decimalToFloat(10_000)
+      );
+      expect(mmr).eq(percentageToFloat("1%"));
+    });
+  });
 });

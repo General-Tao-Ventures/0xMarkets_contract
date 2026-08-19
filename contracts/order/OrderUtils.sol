@@ -43,6 +43,9 @@ library OrderUtils {
         bool isExternalCall;
         string reason;
         bytes reasonBytes;
+        // when true, cancelOrder skips the trader-selected cancellation callback (used by forced
+        // auto-cancel cleanup so a liquidation cannot run unpaid callback gas on the keeper)
+        bool skipCallback;
     }
 
     struct CreateOrderCache {
@@ -161,20 +164,35 @@ library OrderUtils {
 
         CallbackUtils.validateCallbackGasLimit(dataStore, order.callbackGasLimit());
 
-        cache.estimatedGasLimit = GasUtils.estimateExecuteOrderGasLimit(dataStore, order);
-        cache.oraclePriceCount = GasUtils.estimateOrderOraclePriceCount(params.addresses.swapPath.length);
-        uint256 executionFee;
-        (executionFee, cache.executionFeeDiff) = GasUtils.validateAndCapExecutionFee(
-            dataStore,
-            cache.estimatedGasLimit,
-            params.numbers.executionFee,
-            cache.oraclePriceCount,
-            shouldCapMaxExecutionFee
-        );
+        // ! EXECUTION FEE EXEMPTION
+        // The minimum-execution-fee validation is intentionally waived (keepers are subsidised
+        // out-of-band), so the full validateAndCapExecutionFee (which reverts below the minimum) is not
+        // used. The MAX cap is still enforced for subaccount / relay orders carrying a callbackContract
+        // (shouldCapMaxExecutionFee) — otherwise a malicious subaccount could set a huge executionFee
+        // carved from the victim's WNT and reclaim it to an attacker callbackContract on cancel
+        // . Excess over the cap is returned to the holding address. Normal orders (no
+        // callback) keep the gasless, uncapped behaviour.
+        uint256 executionFee = params.numbers.executionFee;
+        if (shouldCapMaxExecutionFee) {
+            cache.estimatedGasLimit = GasUtils.estimateExecuteOrderGasLimit(dataStore, order);
+            cache.oraclePriceCount = GasUtils.estimateOrderOraclePriceCount(params.addresses.swapPath.length);
+            (executionFee, cache.executionFeeDiff) = GasUtils.capExecutionFee(
+                dataStore,
+                cache.estimatedGasLimit,
+                params.numbers.executionFee,
+                cache.oraclePriceCount
+            );
+        }
         order.setExecutionFee(executionFee);
 
         if (cache.executionFeeDiff != 0) {
-            GasUtils.transferExcessiveExecutionFee(dataStore, eventEmitter, orderVault, order.account(), cache.executionFeeDiff);
+            GasUtils.transferExcessiveExecutionFee(
+                dataStore,
+                eventEmitter,
+                orderVault,
+                order.account(),
+                cache.executionFeeDiff
+            );
         }
 
         bytes32 key = NonceUtils.getNextKey(dataStore);
@@ -249,7 +267,12 @@ library OrderUtils {
         }
 
         EventUtils.EventLogData memory eventData;
-        CallbackUtils.afterOrderCancellation(params.key, order, eventData);
+        // Forced auto-cancel cleanup (skipCallback) must not run the trader's cancellation callback:
+        // auto-cancel children carry executionFee == 0, so during a liquidation-driven clear their
+        // callbacks would dump unpaid gas onto the keeper. User-initiated cancellations still fire it.
+        if (!params.skipCallback) {
+            CallbackUtils.afterOrderCancellation(params.key, order, eventData);
+        }
 
         GasUtils.payExecutionFee(
             params.dataStore,
@@ -336,7 +359,8 @@ library OrderUtils {
                     gasleft(), // startingGas
                     false, // isExternalCall
                     "AUTO_CANCEL", // reason
-                    "" // reasonBytes
+                    "", // reasonBytes
+                    true // skipCallback: forced cleanup must not run unpaid trader callbacks
                 )
             );
         }

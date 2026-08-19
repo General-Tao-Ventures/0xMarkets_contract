@@ -3,8 +3,8 @@
 pragma solidity ^0.8.0;
 
 import {GelatoRelayContext} from "@gelatonetwork/relay-context/contracts/GelatoRelayContext.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-v4/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts-v4/security/ReentrancyGuard.sol";
 
 import "../../data/DataStore.sol";
 import "../../event/EventEmitter.sol";
@@ -17,6 +17,7 @@ import "../../order/IBaseOrderUtils.sol";
 import "../../order/OrderStoreUtils.sol";
 import "../../order/OrderVault.sol";
 import "../../router/Router.sol";
+import "../../subaccount/SubaccountUtils.sol";
 import "../../swap/SwapUtils.sol";
 import "../../token/TokenUtils.sol";
 
@@ -172,7 +173,7 @@ abstract contract BaseGelatoRelayRouter is GelatoRelayContext, ReentrancyGuard, 
         }
 
         if (order.account() != account) {
-            revert Errors.Unauthorized(account, "account for updateOrder");
+            revert Errors.Unauthorized(account, "updateOrder");
         }
 
         address residualFeeReceiver = increaseExecutionFee ? address(contracts.orderVault) : account;
@@ -207,7 +208,7 @@ abstract contract BaseGelatoRelayRouter is GelatoRelayContext, ReentrancyGuard, 
         }
 
         if (order.account() != account) {
-            revert Errors.Unauthorized(account, "account for cancelOrder");
+            revert Errors.Unauthorized(account, "cancelOrder");
         }
 
         _handleRelay(contracts, relayParams, account, account, isSubaccount);
@@ -269,7 +270,7 @@ abstract contract BaseGelatoRelayRouter is GelatoRelayContext, ReentrancyGuard, 
         }
 
         _handleTokenPermits(relayParams.tokenPermits);
-        return _handleRelayFee(contracts, relayParams, account, residualFeeReceiver);
+        return _handleRelayFee(contracts, relayParams, account, residualFeeReceiver, isSubaccount);
     }
 
     function _handleTokenPermits(TokenPermit[] calldata tokenPermits) internal {
@@ -307,7 +308,8 @@ abstract contract BaseGelatoRelayRouter is GelatoRelayContext, ReentrancyGuard, 
         Contracts memory contracts,
         RelayParams calldata relayParams,
         address account,
-        address residualFeeReceiver
+        address residualFeeReceiver,
+        bool isSubaccount
     ) internal returns (uint256) {
         address wnt = TokenUtils.wnt(contracts.dataStore);
 
@@ -317,6 +319,10 @@ abstract contract BaseGelatoRelayRouter is GelatoRelayContext, ReentrancyGuard, 
 
         uint256 outputAmount;
         if (relayParams.externalCalls.externalCallTargets.length > 0) {
+            // Attribute only the WNT produced by this caller's external calls, measured as the balance
+            // delta across the calls. Reading the full post-call balance would hand any WNT already
+            // stranded on the router (from a stray transfer or prior residue) to whoever calls next.
+            uint256 feeTokenBalanceBefore = ERC20(_getFeeToken()).balanceOf(address(this));
             _sendTokens(account, relayParams.fee.feeToken, address(externalHandler), relayParams.fee.feeAmount);
             externalHandler.makeExternalCalls(
                 relayParams.externalCalls.externalCallTargets,
@@ -324,8 +330,15 @@ abstract contract BaseGelatoRelayRouter is GelatoRelayContext, ReentrancyGuard, 
                 relayParams.externalCalls.refundTokens,
                 relayParams.externalCalls.refundReceivers
             );
-            outputAmount = ERC20(_getFeeToken()).balanceOf(address(this));
+            outputAmount = ERC20(_getFeeToken()).balanceOf(address(this)) - feeTokenBalanceBefore;
         } else if (relayParams.fee.feeSwapPath.length != 0) {
+            // a subaccount is authorised by action count, never by amount, so an uncapped fee swap
+            // lets it burn the main account's balance through the atomic swap fee
+            if (isSubaccount) {
+                SubaccountUtils.validateRelayFeeSwap(
+                    contracts.dataStore, oracle, relayParams.fee.feeToken, relayParams.fee.feeAmount
+                );
+            }
             _sendTokens(account, relayParams.fee.feeToken, address(contracts.orderVault), relayParams.fee.feeAmount);
             outputAmount = _swapFeeTokens(contracts, wnt, relayParams.fee);
         } else if (relayParams.fee.feeToken == wnt) {

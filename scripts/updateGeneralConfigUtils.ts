@@ -11,13 +11,15 @@ import {
 import * as keys from "../utils/keys";
 
 const processGeneralConfig = async ({ generalConfig, oracleConfig, handleConfig }) => {
-  await handleConfig(
-    "address",
-    keys.CHAINLINK_PAYMENT_TOKEN,
-    "0x",
-    oracleConfig.chainlinkPaymentToken,
-    `chainlinkPaymentToken`
-  );
+  if (oracleConfig.chainlinkPaymentToken) {
+    await handleConfig(
+      "address",
+      keys.CHAINLINK_PAYMENT_TOKEN,
+      "0x",
+      oracleConfig.chainlinkPaymentToken,
+      `chainlinkPaymentToken`
+    );
+  }
 
   await handleConfig(
     "uint",
@@ -85,35 +87,75 @@ const processGeneralConfig = async ({ generalConfig, oracleConfig, handleConfig 
     `maxCallbackGasLimit`
   );
 
+  await handleConfig(
+    "uint",
+    keys.MAX_RELAY_FEE_SWAP_USD_FOR_SUBACCOUNT,
+    "0x",
+    generalConfig.maxRelayFeeSwapUsdForSubaccount,
+    `maxRelayFeeSwapUsdForSubaccount`
+  );
+
   await handleConfig("uint", keys.MAX_SWAP_PATH_LENGTH, "0x", generalConfig.maxSwapPathLength, `maxSwapPathLength`);
 
   await handleConfig("uint", keys.MIN_COLLATERAL_USD, "0x", generalConfig.minCollateralUsd, `minCollateralUsd`);
 
   await handleConfig("uint", keys.MIN_POSITION_SIZE_USD, "0x", generalConfig.minPositionSizeUsd, `minCollateralUsd`);
 
-  await handleConfig(
-    "uint",
-    keys.SWAP_FEE_RECEIVER_FACTOR,
-    "0x",
-    generalConfig.swapFeeReceiverFactor,
-    `swapFeeReceiverFactor`
-  );
+  if (generalConfig.positionFeeVeAlphaFactor !== undefined) {
+    await handleConfig(
+      "uint",
+      keys.POSITION_FEE_VEALPHA_FACTOR,
+      "0x",
+      generalConfig.positionFeeVeAlphaFactor,
+      `positionFeeVeAlphaFactor`
+    );
+  }
+  if (generalConfig.positionFeeTreasuryFactor !== undefined) {
+    await handleConfig(
+      "uint",
+      keys.POSITION_FEE_TREASURY_FACTOR,
+      "0x",
+      generalConfig.positionFeeTreasuryFactor,
+      `positionFeeTreasuryFactor`
+    );
+  }
+  if (generalConfig.positionFeeBuybackFactor !== undefined) {
+    await handleConfig(
+      "uint",
+      keys.POSITION_FEE_BUYBACK_FACTOR,
+      "0x",
+      generalConfig.positionFeeBuybackFactor,
+      `positionFeeBuybackFactor`
+    );
+  }
 
-  await handleConfig(
-    "uint",
-    keys.POSITION_FEE_RECEIVER_FACTOR,
-    "0x",
-    generalConfig.positionFeeReceiverFactor,
-    `positionFeeReceiverFactor`
-  );
-
-  await handleConfig(
-    "uint",
-    keys.LIQUIDATION_FEE_RECEIVER_FACTOR,
-    "0x",
-    generalConfig.liquidationFeeReceiverFactor,
-    `liquidationFeeReceiverFactor`
-  );
+  if (generalConfig.liquidationFeeValidatorFactor !== undefined) {
+    await handleConfig(
+      "uint",
+      keys.LIQUIDATION_FEE_VALIDATOR_FACTOR,
+      "0x",
+      generalConfig.liquidationFeeValidatorFactor,
+      `liquidationFeeValidatorFactor`
+    );
+  }
+  if (generalConfig.liquidationFeeInsuranceFactor !== undefined) {
+    await handleConfig(
+      "uint",
+      keys.LIQUIDATION_FEE_INSURANCE_FACTOR,
+      "0x",
+      generalConfig.liquidationFeeInsuranceFactor,
+      `liquidationFeeInsuranceFactor`
+    );
+  }
+  if (generalConfig.liquidationFeeBuybackFactor !== undefined) {
+    await handleConfig(
+      "uint",
+      keys.LIQUIDATION_FEE_BUYBACK_FACTOR,
+      "0x",
+      generalConfig.liquidationFeeBuybackFactor,
+      `liquidationFeeBuybackFactor`
+    );
+  }
 
   await handleConfig("uint", keys.DEPOSIT_GAS_LIMIT, "0x", generalConfig.depositGasLimit, `depositGasLimit`);
 
@@ -290,6 +332,26 @@ const processGeneralConfig = async ({ generalConfig, oracleConfig, handleConfig 
     generalConfig.maxExecutionFeeMultiplierFactor,
     `maxExecutionFeeMultiplierFactor`
   );
+
+  if (generalConfig.insuranceFundEpochLength !== undefined) {
+    await handleConfig(
+      "uint",
+      keys.INSURANCE_FUND_EPOCH_LENGTH,
+      "0x",
+      generalConfig.insuranceFundEpochLength,
+      `insuranceFundEpochLength`
+    );
+  }
+
+  if (generalConfig.insuranceFundMaxEpochAge !== undefined) {
+    await handleConfig(
+      "uint",
+      keys.INSURANCE_FUND_MAX_EPOCH_AGE,
+      "0x",
+      generalConfig.insuranceFundMaxEpochAge,
+      `insuranceFundMaxEpochAge`
+    );
+  }
 };
 
 export async function updateGeneralConfig({ write }) {
@@ -391,11 +453,16 @@ export async function updateGeneralConfig({ write }) {
 
     if (write) {
       const tx = await config.multicall(multicallWriteParams);
+      await tx.wait(1);
+      await new Promise((r) => setTimeout(r, 2000));
       console.log(`tx sent: ${tx.hash}`);
     } else {
-      await config.callStatic.multicall(multicallWriteParams, {
-        from: "0xF09d66CF7dEBcdEbf965F1Ac6527E1Aa5D47A745",
-      });
+      await config.callStatic.multicall(
+        multicallWriteParams
+        // {
+        //   from: "0xF09d66CF7dEBcdEbf965F1Ac6527E1Aa5D47A745",
+        // }
+      );
       console.log("NOTE: executed in read-only mode, no transactions were sent");
     }
   } catch (ex) {

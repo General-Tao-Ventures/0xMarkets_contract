@@ -1,5 +1,7 @@
-import { createDeployFunction } from "../utils/deploy";
+import { configNetworkName } from "../utils/network";
+import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { setBoolIfDifferent } from "../utils/dataStore";
+import { createDeployFunction } from "../utils/deploy";
 import * as keys from "../utils/keys";
 
 const constructorContracts = ["DataStore", "Oracle"];
@@ -10,7 +12,7 @@ const func = createDeployFunction({
   getDeployArgs: async ({ dependencyContracts, gmx, network, get }) => {
     const oracleConfig = await gmx.getOracle();
     let dataStreamFeedVerifierAddress = oracleConfig.dataStreamFeedVerifier;
-    if (network.name === "hardhat") {
+    if (network.name === "hardhat" || configNetworkName(network.name) === "localhost") {
       const dataStreamFeedVerifier = await get("MockDataStreamVerifier");
       dataStreamFeedVerifierAddress = dataStreamFeedVerifier.address;
     }
@@ -32,5 +34,13 @@ const func = createDeployFunction({
 });
 
 func.dependencies = func.dependencies.concat(["MockDataStreamVerifier"]);
+
+func.skip = async ({ network }: HardhatRuntimeEnvironment) => {
+  return (
+    configNetworkName(network.name) === "base" ||
+    configNetworkName(network.name) === "baseSepolia" ||
+    configNetworkName(network.name) === "localhost"
+  );
+};
 
 export default func;

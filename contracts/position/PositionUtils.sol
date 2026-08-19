@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import "@openzeppelin/contracts-v4/utils/math/SafeCast.sol";
 
 import "../utils/Precision.sol";
 
@@ -13,6 +13,7 @@ import "../data/Keys.sol";
 
 import "../pricing/PositionPricingUtils.sol";
 import "../order/BaseOrderUtils.sol";
+import "./LeverageLadderUtils.sol";
 
 // @title PositionUtils
 // @dev Library for position functions
@@ -129,31 +130,26 @@ library PositionUtils {
     struct IsPositionLiquidatableInfo {
         int256 remainingCollateralUsd;
         int256 minCollateralUsd;
-        int256 minCollateralUsdForLeverage;
+        int256 requiredCollateralUsd;
+        uint256 mmr;
     }
 
     // @dev IsPositionLiquidatableCache struct used in isPositionLiquidatable
     // to avoid stack too deep errors
     // @param positionPnlUsd the position's pnl in USD
-    // @param minCollateralFactor the min collateral factor
+    // @param mmr the dynamic maintenance margin ratio for the position
     // @param collateralTokenPrice the collateral token price
     // @param collateralUsd the position's collateral in USD
     // @param usdDeltaForPriceImpact the usdDelta value for the price impact calculation
     // @param priceImpactUsd the price impact of closing the position in USD
     struct IsPositionLiquidatableCache {
         int256 positionPnlUsd;
-        uint256 minCollateralFactor;
+        uint256 mmr;
         Price.Props collateralTokenPrice;
         uint256 collateralUsd;
         int256 usdDeltaForPriceImpact;
         int256 priceImpactUsd;
         bool hasPositiveImpact;
-    }
-
-    struct GetExecutionPriceForDecreaseCache {
-        int256 priceImpactUsd;
-        uint256 priceImpactDiffUsd;
-        uint256 executionPrice;
     }
 
     // @dev get the position pnl in USD
@@ -264,7 +260,8 @@ library PositionUtils {
         Market.Props memory market,
         MarketUtils.MarketPrices memory prices,
         bool shouldValidateMinPositionSize,
-        bool shouldValidateMinCollateralUsd
+        bool shouldValidateMinCollateralUsd,
+        bool shouldValidateMinLeverage
     ) public view {
         if (position.sizeInUsd() == 0 || position.sizeInTokens() == 0) {
             revert Errors.InvalidPositionSizeValues(position.sizeInUsd(), position.sizeInTokens());
@@ -277,6 +274,28 @@ library PositionUtils {
             uint256 minPositionSizeUsd = dataStore.getUint(Keys.MIN_POSITION_SIZE_USD);
             if (position.sizeInUsd() < minPositionSizeUsd) {
                 revert Errors.MinPositionSize(position.sizeInUsd(), minPositionSizeUsd);
+            }
+        }
+
+        // enforce min_leverage lower bound when configured (> 0 is opt-in). This is an open-time /
+        // size-increase constraint only: decreases, collateral top-ups and ADL all move a position
+        // toward safety by lowering leverage, so the floor must not fire on them (it would trap
+        // de-risking and block partial ADL). The increase path passes shouldValidateMinLeverage=true.
+        if (shouldValidateMinLeverage) {
+            uint256 minLeverage = MarketUtils.getMinLeverage(dataStore, market.marketToken);
+            if (minLeverage > 0) {
+                Price.Props memory collateralTokenPrice = MarketUtils.getCachedTokenPrice(
+                    position.collateralToken(),
+                    market,
+                    prices
+                );
+                uint256 collateralUsd = position.collateralAmount() * collateralTokenPrice.min;
+                if (collateralUsd > 0) {
+                    uint256 currLeverage = Precision.toFactor(position.sizeInUsd(), collateralUsd);
+                    if (currLeverage < minLeverage) {
+                        revert Errors.InvalidLeverage(currLeverage, minLeverage);
+                    }
+                }
             }
         }
 
@@ -294,7 +313,8 @@ library PositionUtils {
                 reason,
                 info.remainingCollateralUsd,
                 info.minCollateralUsd,
-                info.minCollateralUsdForLeverage
+                info.requiredCollateralUsd,
+                info.mmr
             );
         }
     }
@@ -377,6 +397,7 @@ library PositionUtils {
             market.longToken, // longToken
             market.shortToken, // shortToken
             position.sizeInUsd(), // sizeDeltaUsd
+            0, // remainingCollateralUsd, needs for liquidation fee calculation
             address(0), // uiFeeReceiver
 
             // should not account for liquidation fees to determine if position should be liquidated
@@ -399,13 +420,7 @@ library PositionUtils {
             + cache.priceImpactUsd
             - collateralCostUsd.toInt256();
 
-        cache.minCollateralFactor = MarketUtils.getMinCollateralFactor(dataStore, market.marketToken);
-
-        // validate if (remaining collateral) / position.size is less than the min collateral factor (max leverage exceeded)
-        // this validation includes the position fee to be paid when closing the position
-        // i.e. if the position does not have sufficient collateral after closing fees it is considered a liquidatable position
-        info.minCollateralUsdForLeverage = Precision.applyFactor(position.sizeInUsd(), cache.minCollateralFactor).toInt256();
-
+        // absolute USD floor on remaining collateral (independent of leverage)
         if (shouldValidateMinCollateralUsd) {
             info.minCollateralUsd = dataStore.getUint(Keys.MIN_COLLATERAL_USD).toInt256();
             if (info.remainingCollateralUsd < info.minCollateralUsd) {
@@ -413,12 +428,24 @@ library PositionUtils {
             }
         }
 
+        // insolvent — liquidatable regardless of MMR
         if (info.remainingCollateralUsd <= 0) {
-            return (true, "< 0", info);
+            return (true, "insolvent", info);
         }
 
-        if (info.remainingCollateralUsd < info.minCollateralUsdForLeverage) {
-            return (true, "min collateral for leverage", info);
+        // MMR is computed from leverage at last modification (sizeInUsd / collateralUsd),
+        // not from the current mark price. Stable between user-initiated modifications.
+        cache.mmr = MarketUtils.getDynamicMmr(
+            dataStore,
+            market.marketToken,
+            position.sizeInUsd(),
+            cache.collateralUsd
+        );
+        info.mmr = cache.mmr;
+        info.requiredCollateralUsd = Precision.applyFactor(cache.collateralUsd, cache.mmr).toInt256();
+
+        if (info.remainingCollateralUsd < info.requiredCollateralUsd) {
+            return (true, "mmr breach", info);
         }
 
         return (false, "", info);
@@ -470,26 +497,49 @@ library PositionUtils {
             return (false, remainingCollateralUsd);
         }
 
-        // the min collateral factor will increase as the open interest for a market increases
-        // this may lead to previously created limit increase orders not being executable
-        //
-        // the position's pnl is not factored into the remainingCollateralUsd value, since
-        // factoring in a positive pnl may allow the user to manipulate price and bypass this check
-        // it may be useful to factor in a negative pnl for this check, this can be added if required
-        uint256 minCollateralFactor = MarketUtils.getMinCollateralFactorForOpenInterest(
+        // the open-interest-based floor grows as OI expands; kept to discourage concentration.
+        // the position's pnl is not factored into remainingCollateralUsd, since factoring in a
+        // positive pnl may allow the user to manipulate price and bypass this check.
+        uint256 openInterestMinCollateralFactor = MarketUtils.getMinCollateralFactorForOpenInterest(
             dataStore,
             market,
             values.openInterestDelta,
             isLong
         );
 
-        uint256 minCollateralFactorForMarket = MarketUtils.getMinCollateralFactor(dataStore, market.marketToken);
-        // use the minCollateralFactor for the market if it is larger
-        if (minCollateralFactorForMarket > minCollateralFactor) {
-            minCollateralFactor = minCollateralFactorForMarket;
+        int256 minCollateralUsdForOpenInterest = Precision.applyFactor(values.positionSizeInUsd, openInterestMinCollateralFactor).toInt256();
+
+        // max_leverage-derived floor: required collateral >= sizeInUsd / max_leverage.
+        // If max_leverage is unset (0), the position cannot be validated — reject to avoid
+        // accidentally opening with no leverage cap.
+        uint256 maxLeverage = MarketUtils.getMaxLeverage(dataStore, market.marketToken);
+        if (maxLeverage == 0) {
+            return (false, remainingCollateralUsd);
+        }
+        int256 minCollateralUsdForMaxLeverage = Precision.toFactor(values.positionSizeInUsd, maxLeverage).toInt256();
+
+        // ladder-derived floor: required collateral >= sizeInUsd / ladderMaxLeverage,
+        // where ladderMaxLeverage is the cap of the tier the post-trade notional falls into.
+        // Returns type(uint256).max when no ladder is configured for this market, in which
+        // case the floor contributes 0 and the comparison is unchanged from pre-ladder behaviour.
+        uint256 ladderMaxLeverage = LeverageLadderUtils.getMaxLeverageForNotional(
+            dataStore,
+            market.marketToken,
+            values.positionSizeInUsd
+        );
+        int256 minCollateralUsdForLadderTier = ladderMaxLeverage == type(uint256).max
+            ? int256(0)
+            : Precision.toFactor(values.positionSizeInUsd, ladderMaxLeverage).toInt256();
+
+        // take the tightest of the three floors (max_leverage, OI multiplier, ladder)
+        int256 minCollateralUsdForLeverage = minCollateralUsdForMaxLeverage;
+        if (minCollateralUsdForOpenInterest > minCollateralUsdForLeverage) {
+            minCollateralUsdForLeverage = minCollateralUsdForOpenInterest;
+        }
+        if (minCollateralUsdForLadderTier > minCollateralUsdForLeverage) {
+            minCollateralUsdForLeverage = minCollateralUsdForLadderTier;
         }
 
-        int256 minCollateralUsdForLeverage = Precision.applyFactor(values.positionSizeInUsd, minCollateralFactor).toInt256();
         bool willBeSufficient = remainingCollateralUsd >= minCollateralUsdForLeverage;
 
         return (willBeSufficient, remainingCollateralUsd);
@@ -615,178 +665,6 @@ library PositionUtils {
             fees.referral.affiliate,
             fees.referral.affiliateRewardAmount
         );
-    }
-
-    // returns priceImpactUsd, priceImpactAmount, sizeDeltaInTokens, executionPrice
-    function getExecutionPriceForIncrease(
-        UpdatePositionParams memory params,
-        Price.Props memory indexTokenPrice
-    ) external view returns (int256, int256, uint256, uint256) {
-        // note that the executionPrice is not validated against the order.acceptablePrice value
-        // if the sizeDeltaUsd is zero
-        // for limit orders the order.triggerPrice should still have been validated
-        if (params.order.sizeDeltaUsd() == 0) {
-            // increase order:
-            //     - long: use the larger price
-            //     - short: use the smaller price
-            return (0, 0, 0, indexTokenPrice.pickPrice(params.position.isLong()));
-        }
-
-        int256 priceImpactUsd = PositionPricingUtils.getPriceImpactUsd(
-            PositionPricingUtils.GetPriceImpactUsdParams(
-                params.contracts.dataStore,
-                params.market,
-                params.order.sizeDeltaUsd().toInt256(),
-                params.order.isLong()
-            )
-        );
-
-        // cap priceImpactUsd based on the amount available in the position impact pool
-        priceImpactUsd = MarketUtils.getCappedPositionImpactUsd(
-            params.contracts.dataStore,
-            params.market.marketToken,
-            indexTokenPrice,
-            priceImpactUsd,
-            params.order.sizeDeltaUsd()
-        );
-
-        // for long positions
-        //
-        // if price impact is positive, the sizeDeltaInTokens would be increased by the priceImpactAmount
-        // the priceImpactAmount should be minimized
-        //
-        // if price impact is negative, the sizeDeltaInTokens would be decreased by the priceImpactAmount
-        // the priceImpactAmount should be maximized
-
-        // for short positions
-        //
-        // if price impact is positive, the sizeDeltaInTokens would be decreased by the priceImpactAmount
-        // the priceImpactAmount should be minimized
-        //
-        // if price impact is negative, the sizeDeltaInTokens would be increased by the priceImpactAmount
-        // the priceImpactAmount should be maximized
-
-        int256 priceImpactAmount;
-
-        if (priceImpactUsd > 0) {
-            // use indexTokenPrice.max and round down to minimize the priceImpactAmount
-            priceImpactAmount = priceImpactUsd / indexTokenPrice.max.toInt256();
-        } else {
-            // use indexTokenPrice.min and round up to maximize the priceImpactAmount
-            priceImpactAmount = Calc.roundUpMagnitudeDivision(priceImpactUsd, indexTokenPrice.min);
-        }
-
-        uint256 baseSizeDeltaInTokens;
-
-        if (params.position.isLong()) {
-            // round the number of tokens for long positions down
-            baseSizeDeltaInTokens = params.order.sizeDeltaUsd() / indexTokenPrice.max;
-        } else {
-            // round the number of tokens for short positions up
-            baseSizeDeltaInTokens = Calc.roundUpDivision(params.order.sizeDeltaUsd(), indexTokenPrice.min);
-        }
-
-        int256 sizeDeltaInTokens;
-        if (params.position.isLong()) {
-            sizeDeltaInTokens = baseSizeDeltaInTokens.toInt256() + priceImpactAmount;
-        } else {
-            sizeDeltaInTokens = baseSizeDeltaInTokens.toInt256() - priceImpactAmount;
-        }
-
-        if (sizeDeltaInTokens < 0) {
-            revert Errors.PriceImpactLargerThanOrderSize(priceImpactUsd, params.order.sizeDeltaUsd());
-        }
-
-        // using increase of long positions as an example
-        // if price is $2000, sizeDeltaUsd is $5000, priceImpactUsd is -$1000
-        // priceImpactAmount = -1000 / 2000 = -0.5
-        // baseSizeDeltaInTokens = 5000 / 2000 = 2.5
-        // sizeDeltaInTokens = 2.5 - 0.5 = 2
-        // executionPrice = 5000 / 2 = $2500
-        uint256 executionPrice = BaseOrderUtils.getExecutionPriceForIncrease(
-            params.order.sizeDeltaUsd(),
-            sizeDeltaInTokens.toUint256(),
-            params.order.acceptablePrice(),
-            params.position.isLong()
-        );
-
-        return (priceImpactUsd, priceImpactAmount, sizeDeltaInTokens.toUint256(), executionPrice);
-    }
-
-    // returns priceImpactUsd, priceImpactDiffUsd, executionPrice
-    function getExecutionPriceForDecrease(
-        UpdatePositionParams memory params,
-        Price.Props memory indexTokenPrice
-    ) external view returns (int256, uint256, uint256) {
-        uint256 sizeDeltaUsd = params.order.sizeDeltaUsd();
-
-        // note that the executionPrice is not validated against the order.acceptablePrice value
-        // if the sizeDeltaUsd is zero
-        // for limit orders the order.triggerPrice should still have been validated
-        if (sizeDeltaUsd == 0) {
-            // decrease order:
-            //     - long: use the smaller price
-            //     - short: use the larger price
-            return (0, 0, indexTokenPrice.pickPrice(!params.position.isLong()));
-        }
-
-        GetExecutionPriceForDecreaseCache memory cache;
-
-        cache.priceImpactUsd = PositionPricingUtils.getPriceImpactUsd(
-            PositionPricingUtils.GetPriceImpactUsdParams(
-                params.contracts.dataStore,
-                params.market,
-                -sizeDeltaUsd.toInt256(),
-                params.order.isLong()
-            )
-        );
-
-        // cap priceImpactUsd based on the amount available in the position impact pool
-        cache.priceImpactUsd = MarketUtils.getCappedPositionImpactUsd(
-            params.contracts.dataStore,
-            params.market.marketToken,
-            indexTokenPrice,
-            cache.priceImpactUsd,
-            sizeDeltaUsd
-        );
-
-        if (cache.priceImpactUsd < 0) {
-            uint256 maxPriceImpactFactor = MarketUtils.getMaxPositionImpactFactor(
-                params.contracts.dataStore,
-                params.market.marketToken,
-                false
-            );
-
-            // convert the max price impact to the min negative value
-            // e.g. if sizeDeltaUsd is 10,000 and maxPriceImpactFactor is 2%
-            // then minPriceImpactUsd = -200
-            int256 minPriceImpactUsd = -Precision.applyFactor(sizeDeltaUsd, maxPriceImpactFactor).toInt256();
-
-            // cap priceImpactUsd to the min negative value and store the difference in priceImpactDiffUsd
-            // e.g. if priceImpactUsd is -500 and minPriceImpactUsd is -200
-            // then set priceImpactDiffUsd to -200 - -500 = 300
-            // set priceImpactUsd to -200
-            if (cache.priceImpactUsd < minPriceImpactUsd) {
-                cache.priceImpactDiffUsd = (minPriceImpactUsd - cache.priceImpactUsd).toUint256();
-                cache.priceImpactUsd = minPriceImpactUsd;
-            }
-        }
-
-        // the executionPrice is calculated after the price impact is capped
-        // so the output amount directly received by the user may not match
-        // the executionPrice, the difference would be stored as a
-        // claimable amount
-        cache.executionPrice = BaseOrderUtils.getExecutionPriceForDecrease(
-            indexTokenPrice,
-            params.position.sizeInUsd(),
-            params.position.sizeInTokens(),
-            sizeDeltaUsd,
-            cache.priceImpactUsd,
-            params.order.acceptablePrice(),
-            params.position.isLong()
-        );
-
-        return (cache.priceImpactUsd, cache.priceImpactDiffUsd, cache.executionPrice);
     }
 
 }

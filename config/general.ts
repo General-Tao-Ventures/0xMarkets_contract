@@ -1,13 +1,18 @@
+import { configNetworkName } from "../utils/network";
 import { ethers } from "ethers";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { decimalToFloat, percentageToFloat, expandDecimals } from "../utils/math";
+import { decimalToFloat, expandDecimals, percentageToFloat } from "../utils/math";
 
-export default async function ({ network }: HardhatRuntimeEnvironment) {
+export default async function (hre: HardhatRuntimeEnvironment) {
+  const { network } = hre;
   if (network.name === "hardhat") {
     // Note that this is only for the hardhat config, the config for all
     // other networks is separate from this
     return {
-      feeReceiver: ethers.constants.AddressZero,
+      veAlphaFeeReceiver: ethers.constants.AddressZero,
+      treasuryFeeReceiver: ethers.constants.AddressZero,
+      buybackFeeReceiver: ethers.constants.AddressZero,
+      validatorFeeReceiver: ethers.constants.AddressZero,
       holdingAddress: ethers.constants.AddressZero,
       sequencerUptimeFeed: ethers.constants.AddressZero,
       sequencerGraceDuration: 300,
@@ -48,15 +53,28 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
 
       maxSwapPathLength: 5,
       maxCallbackGasLimit: 2_000_000,
+      // bounds a subaccount-initiated relay fee swap; the relay is unused today, this is the
+      // safeguard for if it is ever enabled
+      maxRelayFeeSwapUsdForSubaccount: decimalToFloat(10_000),
       minCollateralUsd: decimalToFloat(1),
 
       minPositionSizeUsd: decimalToFloat(1),
       claimableCollateralTimeDivisor: 60 * 60,
+      claimableCollateralDelay: 60 * 60 * 24 * 90, // 90d backstop: withheld collateral auto-releases if keeper never sets a factor
 
-      positionFeeReceiverFactor: 0,
-      swapFeeReceiverFactor: 0,
-      borrowingFeeReceiverFactor: 0,
-      liquidationFeeReceiverFactor: 0,
+      positionFeeVeAlphaFactor: 0,
+      positionFeeTreasuryFactor: 0,
+      positionFeeBuybackFactor: 0,
+      liquidationFeeValidatorFactor: 0,
+      liquidationFeeInsuranceFactor: 0,
+      liquidationFeeBuybackFactor: 0,
+
+      // Insurance fund epoch lifecycle. SettlementHandler enforces
+      // `block.timestamp >= lastEpochStart + epochLength` before re-snapshot;
+      // drawdown injection is disabled if `block.timestamp - lastEpochStart >
+      // maxEpochAge` to guard against stale snapshots from missed keeper runs.
+      insuranceFundEpochLength: 7 * 24 * 60 * 60, // 7 days
+      insuranceFundMaxEpochAge: 8 * 24 * 60 * 60, // 8 days
 
       skipBorrowingFeeForSmallerSide: false,
 
@@ -67,8 +85,6 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
   }
 
   const generalConfig = {
-    feeReceiver: "0x43ce1d475e06c65dd879f4ec644b8e0e10ff2b6d",
-    holdingAddress: "0x3f59203ea1c66527422998b54287e1efcacbe2c5",
     sequencerUptimeFeed: ethers.constants.AddressZero,
     sequencerGraceDuration: 300,
     maxUiFeeFactor: percentageToFloat("0.05%"),
@@ -108,15 +124,30 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
 
     maxSwapPathLength: 3,
     maxCallbackGasLimit: 2_000_000,
+    maxRelayFeeSwapUsdForSubaccount: decimalToFloat(10_000),
     minCollateralUsd: decimalToFloat(1),
 
     minPositionSizeUsd: decimalToFloat(1),
     claimableCollateralTimeDivisor: 60 * 60,
+    claimableCollateralDelay: 60 * 60 * 24 * 90, // 90d backstop: withheld collateral auto-releases if keeper never sets a factor
 
-    positionFeeReceiverFactor: decimalToFloat(37, 2), // 37%
-    swapFeeReceiverFactor: decimalToFloat(37, 2), // 37%
-    borrowingFeeReceiverFactor: decimalToFloat(37, 2), // 37%
-    liquidationFeeReceiverFactor: decimalToFloat(37, 2), // 37%
+    // 40% + 10% + 0% = 50% to receivers; residual 50% stays in the LP pool.
+    positionFeeVeAlphaFactor: percentageToFloat("40%"),
+    positionFeeTreasuryFactor: percentageToFloat("10%"),
+    positionFeeBuybackFactor: percentageToFloat("0%"),
+    // Liquidation fee: 70% insurance, 30% buyback, nothing left over for the pool.
+    //
+    // Only the insurance key routes into the InsuranceVault and credits the per (market, token)
+    // reserve that attemptInjectPool draws on. The validator and buyback keys instead record a
+    // claimable balance against their receiver, so neither can be pointed at the fund — 70% has
+    // to sit on the insurance key alone rather than being split across two pots.
+    liquidationFeeValidatorFactor: 0,
+    liquidationFeeInsuranceFactor: percentageToFloat("70%"),
+    liquidationFeeBuybackFactor: percentageToFloat("30%"),
+
+    // Insurance fund epoch lifecycle (seconds). See deploy/configureGeneralSettings.ts.
+    insuranceFundEpochLength: 7 * 24 * 60 * 60, // 7 days
+    insuranceFundMaxEpochAge: 8 * 24 * 60 * 60, // 8 days
 
     skipBorrowingFeeForSmallerSide: true,
 
@@ -125,34 +156,64 @@ export default async function ({ network }: HardhatRuntimeEnvironment) {
     maxExecutionFeeMultiplierFactor: decimalToFloat(100),
   };
 
-  const networkConfig = {
-    arbitrumGoerli: {},
-    arbitrumSepolia: {
-      maxAutoCancelOrders: 11,
-      maxTotalCallbackGasLimitForAutoCancelOrders: 10_000_000,
-    },
-    avalancheFuji: {},
-    arbitrum: {
-      maxAutoCancelOrders: 11,
-      maxTotalCallbackGasLimitForAutoCancelOrders: 10_000_000,
-      maxCallbackGasLimit: 4_000_000,
-      estimatedGasPerOraclePrice: false,
-      executionGasPerOraclePrice: false,
-      estimatedGasFeeBaseAmount: false,
-      executionGasFeeBaseAmount: false,
-      sequencerUptimeFeed: "0xFdB631F5EE196F0ed6FAa767959853A9F217697D",
+  // Only read for the fork rehearsal entry below; on every real network the addresses are
+  // configured explicitly.
+  const { deployer: forkDeployer } = await hre.getNamedAccounts();
 
-      increaseOrderGasLimit: 3_000_000,
-      decreaseOrderGasLimit: 3_000_000,
-      swapOrderGasLimit: 2_500_000,
-      ignoreOpenInterestForUsageFactor: true,
+  const networkConfigs = {
+    base: {
+      estimatedGasFeeBaseAmount: false,
+      estimatedGasPerOraclePrice: false,
+      executionGasFeeBaseAmount: false,
+      executionGasPerOraclePrice: false,
+      veAlphaFeeReceiver: "0x368f049b8786260D195e6acb925239E5322a1b42",
+      treasuryFeeReceiver: "0x2312e1B479B1Dad9Ba27Ec5EfDc1Da4D001ec191",
+      buybackFeeReceiver: "0x5fcc9FfB832a920376e8105B8A7fdE664E7a15cA",
+      validatorFeeReceiver: "0x2F81a5bbdc980Ff6D3bF340F6AD16B6321BA763A",
+      holdingAddress: "0x81728e391D04A55936bDaB393dE5a73bd944E61B",
     },
-    avalanche: {
-      increaseOrderGasLimit: 3_500_000,
-      decreaseOrderGasLimit: 3_500_000,
-      ignoreOpenInterestForUsageFactor: true,
+    baseSepolia: {
+      estimatedGasFeeBaseAmount: false,
+      estimatedGasPerOraclePrice: false,
+      executionGasFeeBaseAmount: false,
+      executionGasPerOraclePrice: false,
+      veAlphaFeeReceiver: "0x9724251d7DeC79FB5C41F31b2793892831Bf1200",
+      treasuryFeeReceiver: "0x9724251d7DeC79FB5C41F31b2793892831Bf1200",
+      buybackFeeReceiver: "0x9724251d7DeC79FB5C41F31b2793892831Bf1200",
+      validatorFeeReceiver: "0x9724251d7DeC79FB5C41F31b2793892831Bf1200",
+      holdingAddress: "0x9724251d7DeC79FB5C41F31b2793892831Bf1200",
     },
-  }[network.name];
+    localhost: {
+      estimatedGasFeeBaseAmount: false,
+      estimatedGasPerOraclePrice: false,
+      executionGasFeeBaseAmount: false,
+      executionGasPerOraclePrice: false,
+      veAlphaFeeReceiver: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      treasuryFeeReceiver: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      buybackFeeReceiver: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      validatorFeeReceiver: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      holdingAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    },
+    // Rehearsal of the mainnet deploy against a base fork. Everything except these addresses
+    // resolves through configNetworkName to the real `base` config. These point at whichever
+    // account the fork is configured to deploy from, so nothing is pinned to a specific key
+    // and the run doesn't need the mainnet addresses to exist yet.
+    baseFork: {
+      estimatedGasFeeBaseAmount: false,
+      estimatedGasPerOraclePrice: false,
+      executionGasFeeBaseAmount: false,
+      executionGasPerOraclePrice: false,
+      veAlphaFeeReceiver: forkDeployer,
+      treasuryFeeReceiver: forkDeployer,
+      buybackFeeReceiver: forkDeployer,
+      validatorFeeReceiver: forkDeployer,
+      holdingAddress: forkDeployer,
+    },
+  };
+
+  // A fork with an entry of its own wins, so a rehearsal can supply addresses the real
+  // network config is still missing. Otherwise a fork falls through to its source chain.
+  const networkConfig = networkConfigs[network.name] ?? networkConfigs[configNetworkName(network.name)];
 
   if (!networkConfig) {
     throw new Error(`Network config not defined for ${network.name}`);

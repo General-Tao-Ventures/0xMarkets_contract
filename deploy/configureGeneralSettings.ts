@@ -6,14 +6,29 @@ import { updateGeneralConfig } from "../scripts/updateGeneralConfigUtils";
 const func = async ({ gmx }: HardhatRuntimeEnvironment) => {
   const generalConfig = await gmx.getGeneral();
 
-  await setAddressIfDifferent(keys.FEE_RECEIVER, generalConfig.feeReceiver, "fee receiver");
-  await setAddressIfDifferent(keys.HOLDING_ADDRESS, generalConfig.holdingAddress, "holding address");
+  if (generalConfig.veAlphaFeeReceiver !== undefined) {
+    await setAddressIfDifferent(keys.VEALPHA_FEE_RECEIVER, generalConfig.veAlphaFeeReceiver, "veAlpha fee receiver");
+  }
+  if (generalConfig.treasuryFeeReceiver !== undefined) {
+    await setAddressIfDifferent(keys.TREASURY_FEE_RECEIVER, generalConfig.treasuryFeeReceiver, "treasury fee receiver");
+  }
+  if (generalConfig.buybackFeeReceiver !== undefined) {
+    await setAddressIfDifferent(keys.BUYBACK_FEE_RECEIVER, generalConfig.buybackFeeReceiver, "buyback fee receiver");
+  }
+  if (generalConfig.validatorFeeReceiver !== undefined) {
+    await setAddressIfDifferent(
+      keys.VALIDATOR_FEE_RECEIVER,
+      generalConfig.validatorFeeReceiver,
+      "validator fee receiver"
+    );
+  }
+  // INSURANCE_FUND_ADDRESS is deliberately not written here. configureInsuranceFund.ts sets it
+  // to the InsuranceVault it deploys; a second writer would race it, and whichever ran last
+  // would win. An EOA winning that race is not inert — InsuranceFundUtils.deposit calls
+  // recordTransferIn on the address, which reverts against an account with no code, so every
+  // liquidation would revert while the insurance share is non-zero.
 
-  await setUintIfDifferent(
-    keys.BORROWING_FEE_RECEIVER_FACTOR,
-    generalConfig.borrowingFeeReceiverFactor,
-    "borrowingFeeReceiverFactor"
-  );
+  await setAddressIfDifferent(keys.HOLDING_ADDRESS, generalConfig.holdingAddress, "holding address");
 
   await setBoolIfDifferent(
     keys.SKIP_BORROWING_FEE_FOR_SMALLER_SIDE,
@@ -28,10 +43,36 @@ const func = async ({ gmx }: HardhatRuntimeEnvironment) => {
   );
 
   await setUintIfDifferent(
+    keys.CLAIMABLE_COLLATERAL_DELAY,
+    generalConfig.claimableCollateralDelay,
+    "claimable collateral delay"
+  );
+
+  await setUintIfDifferent(
     keys.MAX_EXECUTION_FEE_MULTIPLIER_FACTOR,
     generalConfig.maxExecutionFeeMultiplierFactor,
     "max execution fee multiplier factor"
   );
+
+  // Insurance fund epoch globals. EPOCH_LENGTH gates SettlementHandler's
+  // idempotency guard (re-snapshot is rejected before block.timestamp >=
+  // lastEpochStart + epochLength). MAX_EPOCH_AGE disables drawdown injection
+  // when the snapshot is older than that — guards against a missed keeper run
+  // poisoning a stale baseline. Both are seconds.
+  if (generalConfig.insuranceFundEpochLength !== undefined) {
+    await setUintIfDifferent(
+      keys.INSURANCE_FUND_EPOCH_LENGTH,
+      generalConfig.insuranceFundEpochLength,
+      "insurance fund epoch length"
+    );
+  }
+  if (generalConfig.insuranceFundMaxEpochAge !== undefined) {
+    await setUintIfDifferent(
+      keys.INSURANCE_FUND_MAX_EPOCH_AGE,
+      generalConfig.insuranceFundMaxEpochAge,
+      "insurance fund max epoch age"
+    );
+  }
 
   const write = process.env.FOR_EXISTING_MAINNET_DEPLOYMENT ? false : true;
   if (write) {

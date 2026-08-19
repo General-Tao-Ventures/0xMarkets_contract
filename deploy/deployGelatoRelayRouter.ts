@@ -17,11 +17,14 @@ const func = createDeployFunction({
   getDeployArgs: async ({ dependencyContracts }) => {
     return constructorContracts.map((dependencyName) => dependencyContracts[dependencyName].address);
   },
-  libraryNames: ["MarketStoreUtils", "MarketUtils", "OrderStoreUtils", "SwapUtils"],
+  libraryNames: ["MarketStoreUtils", "MarketUtils", "OrderStoreUtils", "SubaccountUtils", "SwapUtils"],
   afterDeploy: async ({ deployedContract }) => {
     await grantRoleIfNotGranted(deployedContract.address, "CONTROLLER");
     await grantRoleIfNotGranted(deployedContract.address, "ROUTER_PLUGIN");
   },
 });
+
+// gasless relay is unused; deploy only on the in-memory test network, never on a persistent chain
+func.skip = async ({ network }: any) => network.name !== "hardhat";
 
 export default func;

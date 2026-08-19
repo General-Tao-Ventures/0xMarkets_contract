@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/utils/math/SignedMath.sol";
+import "@openzeppelin/contracts-v4/utils/math/SignedMath.sol";
 
 import "../market/MarketUtils.sol";
 
@@ -40,6 +40,7 @@ library PositionPricingUtils {
         address longToken;
         address shortToken;
         uint256 sizeDeltaUsd;
+        uint256 remainingCollateralUsd;
         address uiFeeReceiver;
         bool isLiquidation;
     }
@@ -70,7 +71,6 @@ library PositionPricingUtils {
     }
 
     // @dev PositionFees struct to contain fee values
-    // @param feeReceiverAmount the amount for the fee receiver
     // @param feeAmountForPool the amount of fees for the pool
     // @param positionFeeAmountForPool the position fee amount for the pool
     // @param positionFeeAmount the fee amount for increasing / decreasing the position
@@ -86,8 +86,14 @@ library PositionPricingUtils {
         Price.Props collateralTokenPrice;
         uint256 positionFeeFactor;
         uint256 protocolFeeAmount;
-        uint256 positionFeeReceiverFactor;
-        uint256 feeReceiverAmount;
+        uint256 positionFeeVeAlphaFactor;
+        uint256 positionFeeTreasuryFactor;
+        uint256 positionFeeBuybackFactor;
+        uint256 veAlphaFeeAmount;
+        uint256 treasuryFeeAmount;
+        uint256 buybackFeeAmount;
+        uint256 validatorFeeAmount;
+        uint256 insuranceFeeAmount;
         uint256 feeAmountForPool;
         uint256 positionFeeAmountForPool;
         uint256 positionFeeAmount;
@@ -105,8 +111,10 @@ library PositionPricingUtils {
     struct PositionLiquidationFees {
         uint256 liquidationFeeUsd;
         uint256 liquidationFeeAmount;
-        uint256 liquidationFeeReceiverFactor;
-        uint256 liquidationFeeAmountForFeeReceiver;
+        uint256 liquidationFeeValidatorFactor;
+        uint256 liquidationFeeAmountForValidator;
+        uint256 liquidationFeeInsuranceFactor;
+        uint256 liquidationFeeAmountForInsurance;
     }
 
     // @param affiliate the referral affiliate of the trader
@@ -128,8 +136,6 @@ library PositionPricingUtils {
     struct PositionBorrowingFees {
         uint256 borrowingFeeUsd;
         uint256 borrowingFeeAmount;
-        uint256 borrowingFeeReceiverFactor;
-        uint256 borrowingFeeAmountForFeeReceiver;
     }
 
     // @param fundingFeeAmount the position's funding fee amount
@@ -280,18 +286,25 @@ library PositionPricingUtils {
         uint256 nextLongOpenInterest = longOpenInterest;
         uint256 nextShortOpenInterest = shortOpenInterest;
 
+        // with single token markets, because getOpenInterest is rounded down when divided by two
+        // it is possible for the usdDelta to exceed the calculated open interest
+        // to prevent reverts here, nextLongOpenInterest / nextShortOpenInterest is set to 0 for this case.
+        // This restores upstream GMX's clamp (ZEROMARK-483): an interim GMX commit had reverted here
+        // instead, which bricks full close / liquidation / ADL on our single-token (longToken==shortToken)
+        // markets. The negative-OI case is separately validated in applyDeltaToOpenInterest, so clamping
+        // to 0 here is safe.
         if (params.isLong) {
             if (params.usdDelta < 0 && (-params.usdDelta).toUint256() > longOpenInterest) {
-                revert Errors.UsdDeltaExceedsLongOpenInterest(params.usdDelta, longOpenInterest);
+                nextLongOpenInterest = 0;
+            } else {
+                nextLongOpenInterest = Calc.sumReturnUint256(longOpenInterest, params.usdDelta);
             }
-
-            nextLongOpenInterest = Calc.sumReturnUint256(longOpenInterest, params.usdDelta);
         } else {
             if (params.usdDelta < 0 && (-params.usdDelta).toUint256() > shortOpenInterest) {
-                revert Errors.UsdDeltaExceedsShortOpenInterest(params.usdDelta, shortOpenInterest);
+                nextShortOpenInterest = 0;
+            } else {
+                nextShortOpenInterest = Calc.sumReturnUint256(shortOpenInterest, params.usdDelta);
             }
-
-            nextShortOpenInterest = Calc.sumReturnUint256(shortOpenInterest, params.usdDelta);
         }
 
         OpenInterestParams memory openInterestParams = OpenInterestParams(
@@ -329,25 +342,35 @@ library PositionPricingUtils {
         uint256 borrowingFeeUsd = MarketUtils.getBorrowingFees(params.dataStore, params.position);
 
         fees.borrowing = getBorrowingFees(
-            params.dataStore,
             params.collateralTokenPrice,
             borrowingFeeUsd
         );
 
+        // Buyback share of the liquidation fee. Deliberately not a PositionLiquidationFees
+        // field: both buyback shares are claimed by BUYBACK_FEE_RECEIVER so one balance serves
+        // both, and widening that struct pushes DecreasePositionCollateralUtils past the
+        // 24,576-byte limit. Computed inside the liquidation branch so the non-liquidation
+        // path does not pay for a storage read that would always multiply by zero.
+        uint256 liquidationFeeAmountForBuyback;
         if (params.isLiquidation) {
-            fees.liquidation = getLiquidationFees(params.dataStore, params.position.market(), params.sizeDeltaUsd, params.collateralTokenPrice);
+            fees.liquidation = getLiquidationFees(params.dataStore, params.position.market(), params.remainingCollateralUsd, params.collateralTokenPrice);
+            liquidationFeeAmountForBuyback = Precision.applyFactor(
+                fees.liquidation.liquidationFeeAmount,
+                params.dataStore.getUint(Keys.LIQUIDATION_FEE_BUYBACK_FACTOR)
+            );
         }
 
         fees.feeAmountForPool =
             fees.positionFeeAmountForPool +
-            fees.borrowing.borrowingFeeAmount -
-            fees.borrowing.borrowingFeeAmountForFeeReceiver +
+            fees.borrowing.borrowingFeeAmount +
             fees.liquidation.liquidationFeeAmount -
-            fees.liquidation.liquidationFeeAmountForFeeReceiver;
+            fees.liquidation.liquidationFeeAmountForValidator -
+            fees.liquidation.liquidationFeeAmountForInsurance -
+            liquidationFeeAmountForBuyback;
 
-        fees.feeReceiverAmount +=
-            fees.borrowing.borrowingFeeAmountForFeeReceiver +
-            fees.liquidation.liquidationFeeAmountForFeeReceiver;
+        fees.validatorFeeAmount = fees.liquidation.liquidationFeeAmountForValidator;
+        fees.insuranceFeeAmount = fees.liquidation.liquidationFeeAmountForInsurance;
+        fees.buybackFeeAmount += liquidationFeeAmountForBuyback;
 
         fees.funding.latestFundingFeeAmountPerSize = MarketUtils.getFundingFeeAmountPerSize(
             params.dataStore,
@@ -397,16 +420,13 @@ library PositionPricingUtils {
     }
 
     function getBorrowingFees(
-        DataStore dataStore,
         Price.Props memory collateralTokenPrice,
         uint256 borrowingFeeUsd
-    ) internal view returns (PositionBorrowingFees memory) {
+    ) internal pure returns (PositionBorrowingFees memory) {
         PositionBorrowingFees memory borrowingFees;
 
         borrowingFees.borrowingFeeUsd = borrowingFeeUsd;
         borrowingFees.borrowingFeeAmount = borrowingFeeUsd / collateralTokenPrice.min;
-        borrowingFees.borrowingFeeReceiverFactor = dataStore.getUint(Keys.BORROWING_FEE_RECEIVER_FACTOR);
-        borrowingFees.borrowingFeeAmountForFeeReceiver = Precision.applyFactor(borrowingFees.borrowingFeeAmount, borrowingFees.borrowingFeeReceiverFactor);
 
         return borrowingFees;
     }
@@ -465,7 +485,7 @@ library PositionPricingUtils {
     // @param the position's account
     // @param market the position's market
     // @param sizeDeltaUsd the change in position size
-    // @return (affiliate, traderDiscountAmount, affiliateRewardAmount, feeReceiverAmount, positionFeeAmountForPool)
+    // @return PositionFees with veAlpha / treasury / buyback shares populated and pool residual
     function getPositionFeesAfterReferral(
         DataStore dataStore,
         IReferralStorage referralStorage,
@@ -557,11 +577,40 @@ library PositionPricingUtils {
         fees.totalDiscountAmount = fees.pro.traderDiscountAmount > fees.referral.traderDiscountAmount
             ? fees.pro.traderDiscountAmount
             : fees.referral.traderDiscountAmount;
+
+        // guarantee fees.positionFeeAmount - affiliateReward - totalDiscount never underflows,
+        // regardless of how proDiscountFactor / minAffiliateRewardFactor / referral factors
+        // are configured. the existing clamp on lines 542-551 trades min affiliate vs total
+        // rebate but does not enforce the global invariant (sum <= positionFeeAmount).
+        //
+        // primary scenario (per ZEROMARK-264): a high proDiscountFactor paired with a
+        // referral code that floors adjustedAffiliateRewardFactor at minAffiliateRewardFactor
+        // yields totalDiscountAmount + affiliateRewardAmount > positionFeeAmount.
+        // secondary safeguard: a misconfigured proDiscountFactor > FLOAT_PRECISION makes
+        // totalDiscountAmount alone exceed positionFeeAmount.
+        //
+        // preference: preserve the trader discount (what the user signed up for), shrink the
+        // affiliate reward, let protocolFeeAmount fall to zero. keeps isPositionLiquidatable
+        // and decrease paths alive when admin config is misaligned.
+        if (fees.totalDiscountAmount > fees.positionFeeAmount) {
+            fees.totalDiscountAmount = fees.positionFeeAmount;
+        }
+        uint256 maxAffiliateRewardAmount = fees.positionFeeAmount - fees.totalDiscountAmount;
+        if (fees.referral.affiliateRewardAmount > maxAffiliateRewardAmount) {
+            fees.referral.affiliateRewardAmount = maxAffiliateRewardAmount;
+            fees.referral.totalRebateAmount = fees.referral.affiliateRewardAmount + fees.referral.traderDiscountAmount;
+        }
+
         fees.protocolFeeAmount = fees.positionFeeAmount - fees.referral.affiliateRewardAmount - fees.totalDiscountAmount;
 
-        fees.positionFeeReceiverFactor = dataStore.getUint(Keys.POSITION_FEE_RECEIVER_FACTOR);
-        fees.feeReceiverAmount = Precision.applyFactor(fees.protocolFeeAmount, fees.positionFeeReceiverFactor);
-        fees.positionFeeAmountForPool = fees.protocolFeeAmount - fees.feeReceiverAmount;
+        fees.positionFeeVeAlphaFactor = dataStore.getUint(Keys.POSITION_FEE_VEALPHA_FACTOR);
+        fees.veAlphaFeeAmount = Precision.applyFactor(fees.protocolFeeAmount, fees.positionFeeVeAlphaFactor);
+        fees.positionFeeTreasuryFactor = dataStore.getUint(Keys.POSITION_FEE_TREASURY_FACTOR);
+        fees.treasuryFeeAmount = Precision.applyFactor(fees.protocolFeeAmount, fees.positionFeeTreasuryFactor);
+        fees.positionFeeBuybackFactor = dataStore.getUint(Keys.POSITION_FEE_BUYBACK_FACTOR);
+        fees.buybackFeeAmount = Precision.applyFactor(fees.protocolFeeAmount, fees.positionFeeBuybackFactor);
+
+        fees.positionFeeAmountForPool = fees.protocolFeeAmount - fees.veAlphaFeeAmount - fees.treasuryFeeAmount - fees.buybackFeeAmount;
 
         return fees;
     }
@@ -575,8 +624,10 @@ library PositionPricingUtils {
 
         liquidationFees.liquidationFeeUsd = Precision.applyFactor(sizeInUsd, liquidationFeeFactor);
         liquidationFees.liquidationFeeAmount = Calc.roundUpDivision(liquidationFees.liquidationFeeUsd, collateralTokenPrice.min);
-        liquidationFees.liquidationFeeReceiverFactor = dataStore.getUint(Keys.LIQUIDATION_FEE_RECEIVER_FACTOR);
-        liquidationFees.liquidationFeeAmountForFeeReceiver = Precision.applyFactor(liquidationFees.liquidationFeeAmount, liquidationFees.liquidationFeeReceiverFactor);
+        liquidationFees.liquidationFeeValidatorFactor = dataStore.getUint(Keys.LIQUIDATION_FEE_VALIDATOR_FACTOR);
+        liquidationFees.liquidationFeeAmountForValidator = Precision.applyFactor(liquidationFees.liquidationFeeAmount, liquidationFees.liquidationFeeValidatorFactor);
+        liquidationFees.liquidationFeeInsuranceFactor = dataStore.getUint(Keys.LIQUIDATION_FEE_INSURANCE_FACTOR);
+        liquidationFees.liquidationFeeAmountForInsurance = Precision.applyFactor(liquidationFees.liquidationFeeAmount, liquidationFees.liquidationFeeInsuranceFactor);
         return liquidationFees;
     }
 }

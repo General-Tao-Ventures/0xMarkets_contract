@@ -2,9 +2,9 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts-v4/utils/Address.sol";
+import "@openzeppelin/contracts-v4/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts-v4/token/ERC20/utils/SafeERC20.sol";
 
 import "../data/DataStore.sol";
 import "../data/Keys.sol";
@@ -24,6 +24,15 @@ library TokenUtils {
 
     event TokenTransferReverted(string reason, bytes returndata);
     event NativeTokenTransferReverted(string reason);
+
+    /**
+     * @dev Returns the address of the USDC token.
+     * @param dataStore DataStore contract instance where the address of the USDC token is stored.
+     * @return The address of the USDC token.
+     */
+    function usdc(DataStore dataStore) internal view returns (address) {
+        return dataStore.getAddress(Keys.USDC);
+    }
 
     /**
      * @dev Returns the address of the WNT token.

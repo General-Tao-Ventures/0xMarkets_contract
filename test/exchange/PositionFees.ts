@@ -41,8 +41,7 @@ describe("Exchange.PositionFees", () => {
     await dataStore.setUint(keys.positionFeeFactorKey(ethUsdMarket.marketToken, true), decimalToFloat(5, 4)); // 0.05%
     await dataStore.setUint(keys.positionFeeFactorKey(ethUsdMarket.marketToken, false), decimalToFloat(5, 4)); // 0.05%
 
-    await dataStore.setUint(keys.POSITION_FEE_RECEIVER_FACTOR, decimalToFloat(2, 1)); // 20%
-    await dataStore.setUint(keys.BORROWING_FEE_RECEIVER_FACTOR, decimalToFloat(4, 1)); // 40%
+    await dataStore.setUint(keys.POSITION_FEE_VEALPHA_FACTOR, decimalToFloat(2, 1)); // 20%
 
     await dataStore.setUint(keys.borrowingFactorKey(ethUsdMarket.marketToken, true), decimalToFloat(1, 9));
     await dataStore.setUint(keys.borrowingFactorKey(ethUsdMarket.marketToken, false), decimalToFloat(2, 10));
@@ -151,6 +150,110 @@ describe("Exchange.PositionFees", () => {
           expandDecimals(500 * 1000, 6)
         );
       });
+    });
+  });
+
+  // ZEROMARK-264 regression. Before the runtime clamp in PositionPricingUtils,
+  // a pro discount + min affiliate reward whose sum exceeds 100% of the position
+  // fee made `positionFeeAmount - affiliateRewardAmount - totalDiscountAmount`
+  // underflow. Every fee calculation reverted, including the one used by
+  // isPositionLiquidatable — so liquidation could not run and bad debt grew.
+  // With the clamp, the affiliate reward shrinks to whatever is left after
+  // the trader discount, protocolFeeAmount falls to zero, and the order path
+  // (which the liquidation path also exercises) completes.
+  describe("affiliate reward clamps when pro discount + min affiliate would exceed position fee", () => {
+    it("pro 98% + min affiliate 3% → affiliate shrinks to 2%, protocol fee 0, no revert", async () => {
+      await dataStore.setUint(keys.proTraderTierKey(user0.address), 1);
+      await dataStore.setUint(keys.proDiscountFactorKey(1), percentageToFloat("98%"));
+      await dataStore.setUint(keys.minAffiliateRewardFactorKey(1), percentageToFloat("3%"));
+
+      // size 200,000 USD × positionFeeFactor 0.05% / 5,000 USD per WNT = 0.02 WNT
+      const feeAmount = expandDecimals(2, 16);
+      // referralCode0 → tier 1 → totalRebate 10%, discountShare 20%
+      // → referral.traderDiscountFactor = 2%, referral.affiliateRewardFactor = 8%
+      // pro discount (98%) > totalRebate (10%) so adjustedAffiliateRewardFactor
+      // gets floored at minAffiliateRewardFactor = 3%. without the clamp:
+      //   protocolFee = 100% - 3% - 98% = -1%  → UNDERFLOW
+      // with the clamp: affiliate is shrunk so the sum fits.
+
+      await handleOrder(fixture, {
+        create: {
+          account: user0,
+          market: ethUsdMarket,
+          initialCollateralToken: wnt,
+          initialCollateralDeltaAmount: expandDecimals(10, 18),
+          swapPath: [],
+          sizeDeltaUsd: decimalToFloat(200 * 1000),
+          acceptablePrice: expandDecimals(5050, 12),
+          executionFee: expandDecimals(1, 15),
+          minOutputAmount: 0,
+          orderType: OrderType.MarketIncrease,
+          isLong: true,
+          shouldUnwrapNativeToken: false,
+          referralCode: referralCode0,
+        },
+        execute: {
+          afterExecution: ({ logs }) => {
+            const event = getEventData(logs, "PositionFeesCollected");
+
+            // the pre-clamp factor stays at min affiliate (the clamp acts on
+            // amounts, not factors), so this still reads 3%
+            expect(event["referral.adjustedAffiliateRewardFactor"]).eq(percentageToFloat("3%"));
+
+            // pro discount preserved (the trader keeps what they signed up for)
+            expect(event["pro.traderDiscountAmount"]).eq(feeAmount.mul(percentageToFloat("98%")).div(FLOAT_PRECISION));
+
+            // affiliate shrunk to fit: positionFeeAmount × (100% - 98%) = feeAmount × 2%
+            const expectedClampedAffiliate = feeAmount.mul(percentageToFloat("2%")).div(FLOAT_PRECISION);
+            expect(event["referral.affiliateRewardAmount"], "affiliate amount should be clamped").eq(
+              expectedClampedAffiliate
+            );
+
+            // totalRebateAmount is recomputed consistently after the clamp:
+            // = clamped affiliate (2% of fee) + referral trader discount (2% of fee)
+            const expectedReferralTraderDiscount = feeAmount.mul(percentageToFloat("2%")).div(FLOAT_PRECISION);
+            expect(event["referral.traderDiscountAmount"]).eq(expectedReferralTraderDiscount);
+            expect(event["referral.totalRebateAmount"]).eq(
+              expectedClampedAffiliate.add(expectedReferralTraderDiscount)
+            );
+          },
+        },
+      });
+    });
+  });
+
+  it("ignores an unregistered referral code (no discount, no address(0) reward)", async () => {
+    const unregisteredCode = hashString("never registered by anyone");
+    expect(await referralStorage.codeOwners(unregisteredCode)).eq(ethers.constants.AddressZero);
+
+    await handleOrder(fixture, {
+      create: {
+        account: user0,
+        market: ethUsdMarket,
+        initialCollateralToken: wnt,
+        initialCollateralDeltaAmount: expandDecimals(10, 18),
+        swapPath: [],
+        sizeDeltaUsd: decimalToFloat(200 * 1000),
+        acceptablePrice: expandDecimals(5050, 12),
+        executionFee: expandDecimals(1, 15),
+        minOutputAmount: 0,
+        orderType: OrderType.MarketIncrease,
+        isLong: true,
+        shouldUnwrapNativeToken: false,
+        referralCode: unregisteredCode,
+      },
+      execute: {
+        afterExecution: ({ logs }) => {
+          const event = getEventData(logs, "PositionFeesCollected");
+          // tier 0 carries a non-zero rebate, so before the fix an unregistered code granted a
+          // discount and credited the reward to address(0). Now the whole rebate block is skipped
+          // (totalRebateFactor == 0), so those referral fields are not emitted at all.
+          expect(event["referral.traderDiscountAmount"], "no discount emitted").to.be.undefined;
+          expect(event["referral.affiliateRewardAmount"], "no reward emitted").to.be.undefined;
+          // and the protocol fee keeps the full position fee — nothing leaked to a rebate.
+          expect(event.protocolFeeAmount, "protocol fee = full position fee").eq(event.positionFeeAmount);
+        },
+      },
     });
   });
 
@@ -377,9 +480,8 @@ describe("Exchange.PositionFees", () => {
           // positionFeeForPool: 85.5 * 80% => 68.4 USD
           // fundingFee: 0.0016128039998 ETH => 8.064019999 USD
           // borrowingFee:  0.001935343331056032 ETH => 9.67671665528 USD
-          // borrowingFeeForFeeReceiver: 9.67671665528 * 40% => 3.87068666211 USD
-          // feeReceiver: 85.5 * 20% + 3.87068666211 => 20.9706866621 USD
-          // feeForPool: 85.5 * 80% + 9.67671665528 * 60% => 74.2060299932 USD
+          // veAlphaFeeAmount: 85.5 * 20% => 17.1 USD
+          // feeForPool: 85.5 * 80% + 9.67671665528 => 78.0767166553 USD
           // totalNetCost: positionFee + borrowingFee + fundingFee - traderDiscount
           //    => 95 + 9.67671665528 + 8.064019999 - 1.9 => 110.840736654 USD
 
@@ -396,13 +498,11 @@ describe("Exchange.PositionFees", () => {
           expect(positionFeesCollectedEvent.claimableLongTokenAmount).eq("0");
           expect(positionFeesCollectedEvent.claimableShortTokenAmount).eq("0");
           expect(positionFeesCollectedEvent.borrowingFeeAmount).closeTo("1935344931032993", "10000000000"); // 0.001935344931032993 ETH => 9.67671665528 USD
-          expect(positionFeesCollectedEvent.borrowingFeeReceiverFactor).eq(decimalToFloat(4, 1)); // 40%
-          expect(positionFeesCollectedEvent.borrowingFeeAmountForFeeReceiver).closeTo("774137332422412", "10000000000"); // 0.000774137332422412 ETH => 3.87068666211 USD
           expect(positionFeesCollectedEvent.positionFeeFactor).eq(decimalToFloat(5, 4));
           expect(positionFeesCollectedEvent.protocolFeeAmount).eq("17100000000000000"); // 0.0171 ETH => 85.5 USD
-          expect(positionFeesCollectedEvent.positionFeeReceiverFactor).eq(decimalToFloat(2, 1)); // 20%
-          expect(positionFeesCollectedEvent.feeReceiverAmount).closeTo("4194137332422412", "10000000000"); // 0.004194137332422412 ETH => 20.9706866621 USD
-          expect(positionFeesCollectedEvent.feeAmountForPool).closeTo("14841205998633620", "10000000000"); // 0.129800599863361968 ETH => 74.2060299932 USD
+          expect(positionFeesCollectedEvent.positionFeeVeAlphaFactor).eq(decimalToFloat(2, 1)); // 20%
+          expect(positionFeesCollectedEvent.veAlphaFeeAmount).eq("3420000000000000"); // 0.00342 ETH => 17.1 USD
+          expect(positionFeesCollectedEvent.feeAmountForPool).closeTo("15615344931032993", "10000000000"); // 78.0767166553 USD
           expect(positionFeesCollectedEvent.positionFeeAmountForPool).eq("13680000000000000"); // 0.01368 ETH => 68.4 USD
           expect(positionFeesCollectedEvent.positionFeeAmount).eq("19000000000000000"); // 0.019 ETH => 95 USD
           expect(positionFeesCollectedEvent.totalCostAmount).closeTo("22168147331056031", "10000000000"); // 0.022168147331056031 ETH => 110.840736654 USD
@@ -448,9 +548,8 @@ describe("Exchange.PositionFees", () => {
           // positionFeeForPool: 32 * 80% => 25.6 USD
           // fundingFee: 0
           // borrowingFee: 4.838114 USD
-          // borrowingFeeForFeeReceiver: 4.838114 * 40% => 1.9352456 USD
-          // feeReceiver: 32 * 20% + 1.9352456 => 8.3352456 USD
-          // feeForPool: 32 * 80% + 4.838114 * 60% => 28.5028684 USD
+          // veAlphaFeeAmount: 32 * 20% => 6.4 USD
+          // feeForPool: 32 * 80% + 4.838114 => 30.438114 USD
           // totalNetCost: positionFee + borrowingFee + fundingFee - traderDiscount
           //    => 40 + 4.838114 + 0 - 2 => 42.838114 USD
 
@@ -467,13 +566,11 @@ describe("Exchange.PositionFees", () => {
           expect(positionFeesCollectedEvent.claimableLongTokenAmount).closeTo("1612803999900000", "10000000000"); // 0.0016128039999 ETH, 8.0640199995 USD
           expect(positionFeesCollectedEvent.claimableShortTokenAmount).eq("0");
           expect(positionFeesCollectedEvent.borrowingFeeAmount).closeTo("4838114", "50"); // 4.838114 USD
-          expect(positionFeesCollectedEvent.borrowingFeeReceiverFactor).eq(decimalToFloat(4, 1)); // 40%
-          expect(positionFeesCollectedEvent.borrowingFeeAmountForFeeReceiver).closeTo("1935245", "50"); // 1.935245 USD
           expect(positionFeesCollectedEvent.positionFeeFactor).eq(decimalToFloat(5, 4));
           expect(positionFeesCollectedEvent.protocolFeeAmount).eq("32000000"); // 32 USD
-          expect(positionFeesCollectedEvent.positionFeeReceiverFactor).eq(decimalToFloat(2, 1)); // 20%
-          expect(positionFeesCollectedEvent.feeReceiverAmount).closeTo("8335245", "50"); // 8.335245 USD
-          expect(positionFeesCollectedEvent.feeAmountForPool).closeTo("28502869", "50"); // 28.502869 USD
+          expect(positionFeesCollectedEvent.positionFeeVeAlphaFactor).eq(decimalToFloat(2, 1)); // 20%
+          expect(positionFeesCollectedEvent.veAlphaFeeAmount).eq("6400000"); // 6.4 USD
+          expect(positionFeesCollectedEvent.feeAmountForPool).closeTo("30438114", "50"); // 30.438114 USD
           expect(positionFeesCollectedEvent.positionFeeAmountForPool).eq("25600000"); // 25.6 USD
           expect(positionFeesCollectedEvent.positionFeeAmount).eq("40000000"); // 40 USD
           expect(positionFeesCollectedEvent.totalCostAmount).closeTo("42838114", "50"); // 42.838114 USD

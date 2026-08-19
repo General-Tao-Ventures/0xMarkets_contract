@@ -45,17 +45,21 @@ describe("MarketStoreUtils", () => {
 
     const emptyStoreItem = await getEmptyItem();
 
-    const expectedPropsLength = 4;
+    const expectedPropsLength = 5;
     expect(Object.keys(emptyStoreItem).length).eq(expectedPropsLength * 2);
 
     Object.keys(emptyStoreItem).forEach((key, index) => {
-      if (isNaN(key)) {
+      if (isNaN(key) && key !== "reversed") {
         sampleItem[key] = accountList[index].address;
+      }
+      if (key === "reversed") {
+        sampleItem[key] = emptyStoreItem[key];
       }
     });
 
     const initialItemCount = await getItemCount(dataStore);
-    const initialItemKeys = await getItemKeys(dataStore, 0, 10);
+    const initialCount = initialItemCount.toNumber();
+    const initialItemKeys = await getItemKeys(dataStore, 0, initialCount);
 
     await logGasUsage({
       tx: setItem(dataStore, itemKey, sampleItem),
@@ -65,25 +69,31 @@ describe("MarketStoreUtils", () => {
     let fetchedItem = await getItem(dataStore, itemKey);
 
     Object.keys(emptyStoreItem).forEach((key) => {
-      if (isNaN(key)) {
+      if (isNaN(key) && key !== "reversed") {
         expect(fetchedItem[key]).deep.eq(sampleItem[key]);
+      }
+      if (key === "reversed") {
+        expect(fetchedItem[key] === sampleItem[key]);
       }
     });
 
     expect(await getItemCount(dataStore)).eq(initialItemCount.add(1));
-    expect(await getItemKeys(dataStore, 0, 10)).deep.equal(initialItemKeys.concat(itemKey));
+    expect(await getItemKeys(dataStore, 0, initialCount + 1)).deep.equal(initialItemKeys.concat(itemKey));
 
     await removeItem(dataStore, itemKey, sampleItem);
 
     fetchedItem = await getItem(dataStore, itemKey);
 
     Object.keys(emptyStoreItem).forEach((key) => {
-      if (isNaN(key)) {
+      if (isNaN(key) && key !== "reversed") {
         expect(fetchedItem[key]).deep.eq(ethers.constants.AddressZero);
+      }
+      if (key === "reversed") {
+        expect(fetchedItem[key] === false);
       }
     });
 
     expect(await getItemCount(dataStore)).eq(initialItemCount);
-    expect(await getItemKeys(dataStore, 0, 10)).deep.equal(initialItemKeys);
+    expect(await getItemKeys(dataStore, 0, initialCount)).deep.equal(initialItemKeys);
   });
 });

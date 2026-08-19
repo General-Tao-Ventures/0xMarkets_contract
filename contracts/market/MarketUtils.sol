@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import "@openzeppelin/contracts-v4/utils/math/SafeCast.sol";
 
 import "../data/DataStore.sol";
 import "../event/EventEmitter.sol";
@@ -14,6 +14,7 @@ import "./MarketEventUtils.sol";
 import "./MarketStoreUtils.sol";
 
 import "../position/Position.sol";
+import "../position/LeverageLadderUtils.sol";
 import "../order/Order.sol";
 
 import "../oracle/Oracle.sol";
@@ -260,6 +261,47 @@ library MarketUtils {
         return poolAmount * tokenPrice;
     }
 
+    // @dev get the USD value of a pool excluding unrealized trader PnL.
+    // Mirrors getPoolValueInfo's pool-USD computation but skips the long/short
+    // PnL (`getCappedPnl`) deduction, so the value reflects only realized state
+    // plus borrowing-fee accruals minus the impact pool.
+    //
+    // Used by InsuranceFundUtils to snapshot the per-market USD value at epoch
+    // start and to compute the live drawdown fraction. Keeping both call sites
+    // on the same helper guarantees they share the exact same formula —
+    // otherwise a divergence would surface as phantom drawdown.
+    //
+    // Returns int256 to match getPoolValueInfo's return shape; in normal
+    // operation the value is non-negative, but in degenerate states the
+    // impact-pool deduction could exceed the token + borrowing sum. Callers
+    // should treat negative returns as "zero pool value."
+    function getPoolValueExcludingUnrealizedPnl(
+        DataStore dataStore,
+        Market.Props memory market,
+        MarketPrices memory prices,
+        bool maximize
+    ) internal view returns (int256) {
+        uint256 longTokenUsd = getPoolUsdWithoutPnl(dataStore, market, prices, true, maximize);
+        uint256 shortTokenUsd = getPoolUsdWithoutPnl(dataStore, market, prices, false, maximize);
+
+        int256 poolValue = (longTokenUsd + shortTokenUsd).toInt256();
+
+        uint256 totalBorrowingFees = getTotalPendingBorrowingFees(dataStore, market, prices, true);
+        totalBorrowingFees += getTotalPendingBorrowingFees(dataStore, market, prices, false);
+
+        // Post-fee-addresses (PR #31): borrowing fees go 100% to the pool, no
+        // receiver factor — mirror that here so the snapshot matches getPoolValueInfo.
+        poolValue += totalBorrowingFees.toInt256();
+
+        uint256 impactPoolAmount = getNextPositionImpactPoolAmount(dataStore, market.marketToken);
+        // use !maximize for pickPrice since the impactPoolUsd is deducted from the poolValue
+        uint256 impactPoolUsd = impactPoolAmount * prices.indexTokenPrice.pickPrice(!maximize);
+
+        poolValue -= impactPoolUsd.toInt256();
+
+        return poolValue;
+    }
+
     // @dev get the USD value of a pool
     // the value of a pool is the worth of the liquidity provider tokens in the pool - pending trader pnl
     // we use the token index prices to calculate this and ignore price impact since if all positions were closed the
@@ -310,8 +352,8 @@ library MarketUtils {
             false
         );
 
-        result.borrowingFeePoolFactor = Precision.FLOAT_PRECISION - dataStore.getUint(Keys.BORROWING_FEE_RECEIVER_FACTOR);
-        result.poolValue += Precision.applyFactor(result.totalBorrowingFees, result.borrowingFeePoolFactor).toInt256();
+        result.borrowingFeePoolFactor = Precision.FLOAT_PRECISION;
+        result.poolValue += result.totalBorrowingFees.toInt256();
 
         // !maximize should be used for net pnl as a larger pnl leads to a smaller pool value
         // and a smaller pnl leads to a larger pool value
@@ -526,46 +568,6 @@ library MarketUtils {
         return dataStore.getUint(Keys.maxOpenInterestKey(market, isLong));
     }
 
-    // @dev increment the claimable collateral amount
-    // @param dataStore DataStore
-    // @param eventEmitter EventEmitter
-    // @param market the market to increment the claimable collateral for
-    // @param token the claimable token
-    // @param account the account to increment the claimable collateral for
-    // @param delta the amount to increment
-    function incrementClaimableCollateralAmount(
-        DataStore dataStore,
-        EventEmitter eventEmitter,
-        address market,
-        address token,
-        address account,
-        uint256 delta
-    ) internal {
-        uint256 divisor = dataStore.getUint(Keys.CLAIMABLE_COLLATERAL_TIME_DIVISOR);
-        uint256 timeKey = Chain.currentTimestamp() / divisor;
-
-        uint256 nextValue = dataStore.incrementUint(
-            Keys.claimableCollateralAmountKey(market, token, timeKey, account),
-            delta
-        );
-
-        uint256 nextPoolValue = dataStore.incrementUint(
-            Keys.claimableCollateralAmountKey(market, token),
-            delta
-        );
-
-        MarketEventUtils.emitClaimableCollateralUpdated(
-            eventEmitter,
-            market,
-            token,
-            timeKey,
-            account,
-            delta,
-            nextValue,
-            nextPoolValue
-        );
-    }
-
     // @dev increment the claimable funding amount
     // @param dataStore DataStore
     // @param eventEmitter EventEmitter
@@ -646,78 +648,6 @@ library MarketUtils {
         );
 
         return claimableAmount;
-    }
-
-    // @dev claim collateral
-    // @param dataStore DataStore
-    // @param eventEmitter EventEmitter
-    // @param market the market to claim for
-    // @param token the token to claim
-    // @param timeKey the time key
-    // @param account the account to claim for
-    // @param receiver the receiver to send the amount to
-    function claimCollateral(
-        DataStore dataStore,
-        EventEmitter eventEmitter,
-        address market,
-        address token,
-        uint256 timeKey,
-        address account,
-        address receiver
-    ) internal returns (uint256) {
-        uint256 claimableAmount = dataStore.getUint(Keys.claimableCollateralAmountKey(market, token, timeKey, account));
-
-        uint256 claimableFactor;
-
-        {
-            uint256 claimableFactorForTime = dataStore.getUint(Keys.claimableCollateralFactorKey(market, token, timeKey));
-            uint256 claimableFactorForAccount = dataStore.getUint(Keys.claimableCollateralFactorKey(market, token, timeKey, account));
-            claimableFactor = claimableFactorForTime > claimableFactorForAccount ? claimableFactorForTime : claimableFactorForAccount;
-        }
-
-        if (claimableFactor > Precision.FLOAT_PRECISION) {
-            revert Errors.InvalidClaimableFactor(claimableFactor);
-        }
-
-        uint256 claimedAmount = dataStore.getUint(Keys.claimedCollateralAmountKey(market, token, timeKey, account));
-
-        uint256 adjustedClaimableAmount = Precision.applyFactor(claimableAmount, claimableFactor);
-        if (adjustedClaimableAmount <= claimedAmount) {
-            revert Errors.CollateralAlreadyClaimed(adjustedClaimableAmount, claimedAmount);
-        }
-
-        uint256 amountToBeClaimed = adjustedClaimableAmount - claimedAmount;
-
-        dataStore.setUint(
-            Keys.claimedCollateralAmountKey(market, token, timeKey, account),
-            adjustedClaimableAmount
-        );
-
-        uint256 nextPoolValue = dataStore.decrementUint(
-            Keys.claimableCollateralAmountKey(market, token),
-            amountToBeClaimed
-        );
-
-        MarketToken(payable(market)).transferOut(
-            token,
-            receiver,
-            amountToBeClaimed
-        );
-
-        validateMarketTokenBalance(dataStore, market);
-
-        MarketEventUtils.emitCollateralClaimed(
-            eventEmitter,
-            market,
-            token,
-            timeKey,
-            account,
-            receiver,
-            amountToBeClaimed,
-            nextPoolValue
-        );
-
-        return amountToBeClaimed;
     }
 
     // @dev apply a delta to the pool amount
@@ -967,32 +897,6 @@ library MarketUtils {
         return nextValue;
     }
 
-    // @dev apply a delta to the collateral sum
-    // @param dataStore DataStore
-    // @param eventEmitter EventEmitter
-    // @param market the market to apply to
-    // @param collateralToken the collateralToken to apply to
-    // @param isLong whether to apply to the long or short side
-    // @param delta the delta amount
-    function applyDeltaToCollateralSum(
-        DataStore dataStore,
-        EventEmitter eventEmitter,
-        address market,
-        address collateralToken,
-        bool isLong,
-        int256 delta
-    ) internal returns (uint256) {
-        uint256 nextValue = dataStore.applyDeltaToUint(
-            Keys.collateralSumKey(market, collateralToken, isLong),
-            delta,
-            "Invalid state: negative collateralSum"
-        );
-
-        MarketEventUtils.emitCollateralSumUpdated(eventEmitter, market, collateralToken, isLong, delta, nextValue);
-
-        return nextValue;
-    }
-
     // @dev update the funding state
     // @param dataStore DataStore
     // @param market the market to update
@@ -1092,7 +996,7 @@ library MarketUtils {
         DataStore dataStore,
         Market.Props memory market,
         MarketPrices memory prices
-    ) internal view returns (GetNextFundingAmountPerSizeResult memory) {
+    ) public view returns (GetNextFundingAmountPerSizeResult memory) {
         GetNextFundingAmountPerSizeResult memory result;
         GetNextFundingAmountPerSizeCache memory cache;
 
@@ -1159,6 +1063,38 @@ library MarketUtils {
 
         cache.fundingUsd = Precision.applyFactor(cache.sizeOfLargerSide, cache.durationInSeconds * result.fundingFactorPerSecond);
         cache.fundingUsd = cache.fundingUsd / divisor;
+
+        // calculate a baseline swap rate for certain markets (e.g. forex markets)
+        // and adjust the fundingUsd value accordingly
+        bool swapLongsPayShorts = dataStore.getBool(Keys.baselineSwapLongsPayShortsKey(market.marketToken));
+        uint256 swapPerDay = dataStore.getUint(Keys.baselineSwapPerDayKey(market.marketToken));
+        uint256 swapPerSecond = swapPerDay / 86400;
+
+        if (swapPerSecond > 0) {
+            // Divide by the same pool divisor as funding term above (cache.fundingUsd /=
+            // divisor). In single-token markets (longToken == shortToken) divisor == 2 and the
+            // per-size split applies funding to both sides, so an undivided baseline-swap term is
+            // charged at 2x the configured rate.
+            // size the baseline swap on the side that pays it (its own open interest), so the
+            // charge is swapPerDay of the payer's notional. sizing it on the receiving side would
+            // scale the payer's effective rate by receiverOI/payerOI and overcharge a thin payer side.
+            uint256 baselineSwapUsd = Precision.applyFactor(
+                swapLongsPayShorts ? cache.longOpenInterest : cache.shortOpenInterest,
+                cache.durationInSeconds * swapPerSecond
+            ) / divisor;
+
+            if (result.longsPayShorts == swapLongsPayShorts) {
+                cache.fundingUsd += baselineSwapUsd;
+
+            } else {
+                if (cache.fundingUsd >= baselineSwapUsd) {
+                    cache.fundingUsd -= baselineSwapUsd;
+                } else {
+                    cache.fundingUsd = baselineSwapUsd - cache.fundingUsd;
+                    result.longsPayShorts = !result.longsPayShorts;
+                }
+            }
+        }
 
         // split the fundingUsd value by long and short collateral
         // e.g. if the fundingUsd value is $500, and there is $1000 of long open interest using long collateral and $4000 of long open interest
@@ -1371,11 +1307,19 @@ library MarketUtils {
             configCache.maxFundingFactorPerSecond
         );
 
-        cache.nextSavedFundingFactorPerSecondWithMinBound = Calc.boundMagnitude(
-            cache.nextSavedFundingFactorPerSecond,
-            configCache.minFundingFactorPerSecond,
-            configCache.maxFundingFactorPerSecond
-        );
+        // A zero next funding rate means there is no funding direction (e.g. long and short open
+        // interest are balanced with no saved rate). boundMagnitude signs zero as positive and would
+        // lift it to +minFundingFactorPerSecond, charging longs on a perfectly hedged market. Keep a
+        // zero rate at zero; the min floor should only apply to a rate that already has a direction.
+        if (cache.nextSavedFundingFactorPerSecond == 0) {
+            cache.nextSavedFundingFactorPerSecondWithMinBound = 0;
+        } else {
+            cache.nextSavedFundingFactorPerSecondWithMinBound = Calc.boundMagnitude(
+                cache.nextSavedFundingFactorPerSecond,
+                configCache.minFundingFactorPerSecond,
+                configCache.maxFundingFactorPerSecond
+            );
+        }
 
         return (
             cache.nextSavedFundingFactorPerSecondWithMinBound.abs(),
@@ -1720,7 +1664,7 @@ library MarketUtils {
     // @param market the position's market
     // @param prices the prices of the market tokens
     // @return the borrowing fees for a position
-    function getNextBorrowingFees(DataStore dataStore, Position.Props memory position, Market.Props memory market, MarketPrices memory prices) internal view returns (uint256) {
+    function getNextBorrowingFees(DataStore dataStore, Position.Props memory position, Market.Props memory market, MarketPrices memory prices) external view returns (uint256) {
         (uint256 nextCumulativeBorrowingFactor, /* uint256 delta */) = getNextCumulativeBorrowingFactor(
             dataStore,
             market,
@@ -1997,11 +1941,103 @@ library MarketUtils {
         return dataStore.getUint(Keys.maxPositionImpactFactorForLiquidationsKey(market));
     }
 
-    // @dev get the min collateral factor
+    // @dev get the max leverage allowed for the market
     // @param dataStore DataStore
     // @param market the market to check
-    function getMinCollateralFactor(DataStore dataStore, address market) internal view returns (uint256) {
-        return dataStore.getUint(Keys.minCollateralFactorKey(market));
+    function getMaxLeverage(DataStore dataStore, address market) internal view returns (uint256) {
+        return dataStore.getUint(Keys.maxLeverageKey(market));
+    }
+
+    // @dev get the min leverage allowed for the market
+    // @param dataStore DataStore
+    // @param market the market to check
+    function getMinLeverage(DataStore dataStore, address market) internal view returns (uint256) {
+        return dataStore.getUint(Keys.minLeverageKey(market));
+    }
+
+    // @dev get the lower clamp of the dynamic MMR
+    // @param dataStore DataStore
+    // @param market the market to check
+    function getMinMmr(DataStore dataStore, address market) internal view returns (uint256) {
+        return dataStore.getUint(Keys.minMmrKey(market));
+    }
+
+    // @dev get the upper clamp of the dynamic MMR
+    // @param dataStore DataStore
+    // @param market the market to check
+    function getMaxMmr(DataStore dataStore, address market) internal view returns (uint256) {
+        return dataStore.getUint(Keys.maxMmrKey(market));
+    }
+
+    // @dev get the tuning multiplier applied to the leverage ratio in the dynamic MMR formula
+    // @param dataStore DataStore
+    // @param market the market to check
+    function getMmrTuning(DataStore dataStore, address market) internal view returns (uint256) {
+        return dataStore.getUint(Keys.mmrTuningKey(market));
+    }
+
+    // @dev compute the dynamic maintenance margin ratio (MMR) for a position
+    // MMR scales with the position's leverage at its last modification:
+    //   currLeverage = sizeInUsd / collateralUsd
+    //   rawMmr       = (currLeverage / maxLeverage) * mmrTuning
+    //   mmr          = clamp(rawMmr, minMmr, maxMmr)
+    // @param dataStore DataStore
+    // @param market the market address
+    // @param sizeInUsd the position's size in USD
+    // @param collateralUsd the position's collateral in USD as of its last modification
+    // @return the dynamic MMR as a factor
+    function getDynamicMmr(
+        DataStore dataStore,
+        address market,
+        uint256 sizeInUsd,
+        uint256 collateralUsd
+    ) internal view returns (uint256) {
+        uint256 maxLeverage = getMaxLeverage(dataStore, market);
+        uint256 mmrTuning = getMmrTuning(dataStore, market);
+        uint256 minMmr = getMinMmr(dataStore, market);
+        uint256 maxMmr = getMaxMmr(dataStore, market);
+
+        // Honor the leverage ladder: a position whose notional falls into a tighter tier must be
+        // maintained against that tier's cap, not the global market max. willPositionCollateralBeSufficient
+        // already floors opening collateral on the ladder tier, but the MMR used at liquidation read only
+        // the global max — so a position opened under (e.g.) a 5x tier was liquidated as if it were allowed
+        // the global 50x, giving it a far smaller maintenance buffer than the tier intends
+        // A lower effective maxLeverage raises rawMmr → higher requiredCollateralUsd → liquidation at the
+        // tier-intended buffer. getMaxLeverageForNotional returns type(uint256).max when no ladder is
+        // configured, leaving the global max unchanged.
+        uint256 ladderMaxLeverage = LeverageLadderUtils.getMaxLeverageForNotional(dataStore, market, sizeInUsd);
+        if (ladderMaxLeverage != 0 && ladderMaxLeverage < maxLeverage) {
+            maxLeverage = ladderMaxLeverage;
+        }
+
+        // Defensive: if maxLeverage is misconfigured (0), fall back to the hard
+        // ceiling — the position cannot be validated under any sensible ratio.
+        if (maxLeverage == 0) {
+            return maxMmr;
+        }
+
+        // Transient zero-collateral states occur during fee deduction inside a
+        // decrease flow (fees eat the entire collateral; PnL covers the rest).
+        // Returning `minMmr` here lets validatePosition pass when PnL can cover
+        // the minimum required buffer, and still fails otherwise.
+        if (collateralUsd == 0) {
+            return minMmr;
+        }
+
+        uint256 currLeverage = Precision.toFactor(sizeInUsd, collateralUsd);
+        uint256 leverageRatio = Precision.toFactor(currLeverage, maxLeverage);
+        uint256 rawMmr = Precision.applyFactor(leverageRatio, mmrTuning);
+
+        // Clamp into [minMmr, maxMmr], applying the ceiling LAST so a misconfigured minMmr > maxMmr
+        // can never return a maintenance ratio above the configured maximum. The
+        // previous order returned minMmr early, skipping the ceiling.
+        if (rawMmr < minMmr) {
+            rawMmr = minMmr;
+        }
+        if (rawMmr > maxMmr) {
+            rawMmr = maxMmr;
+        }
+        return rawMmr;
     }
 
     // @dev get the min collateral factor for open interest multiplier
@@ -2385,18 +2421,22 @@ library MarketUtils {
         // then the borrowing fee would be charged for both sides, this should be very rare
         bool skipBorrowingFeeForSmallerSide = dataStore.getBool(Keys.SKIP_BORROWING_FEE_FOR_SMALLER_SIDE);
         if (skipBorrowingFeeForSmallerSide) {
-            uint256 longOpenInterest = getOpenInterest(dataStore, market, true);
-            uint256 shortOpenInterest = getOpenInterest(dataStore, market, false);
+            // Compare the same live reserved USD that the borrowing fee is sized on, not the stored USD
+            // open interest. The long side's reserved USD scales with the index price, so after a price
+            // move the long side can be the smaller side by stored notional yet the larger reserve
+            // consumer; comparing reserved USD keeps the exemption on the side actually reserving less.
+            uint256 longReservedUsd = getReservedUsd(dataStore, market, prices, true);
+            uint256 shortReservedUsd = getReservedUsd(dataStore, market, prices, false);
 
-            // if getting the borrowing factor for longs and if the longOpenInterest
-            // is smaller than the shortOpenInterest, then return zero
-            if (isLong && longOpenInterest < shortOpenInterest) {
+            // if getting the borrowing factor for longs and if the long reserved USD
+            // is smaller than the short reserved USD, then return zero
+            if (isLong && longReservedUsd < shortReservedUsd) {
                 return 0;
             }
 
-            // if getting the borrowing factor for shorts and if the shortOpenInterest
-            // is smaller than the longOpenInterest, then return zero
-            if (!isLong && shortOpenInterest < longOpenInterest) {
+            // if getting the borrowing factor for shorts and if the short reserved USD
+            // is smaller than the long reserved USD, then return zero
+            if (!isLong && shortReservedUsd < longReservedUsd) {
                 return 0;
             }
         }

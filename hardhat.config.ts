@@ -1,29 +1,30 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import path from "path";
-import fs from "fs";
 import { ethers } from "ethers";
+import fs from "fs";
+import path from "path";
 
-import { HardhatUserConfig, task, types } from "hardhat/config";
+import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomicfoundation/hardhat-verify";
 import "hardhat-contract-sizer";
-import "solidity-coverage";
-import "hardhat-gas-reporter";
 import "hardhat-deploy";
-import "@nomicfoundation/hardhat-chai-matchers";
+import "hardhat-gas-reporter";
+import { HardhatUserConfig, task, types } from "hardhat/config";
+import "solidity-coverage";
 
-import "@typechain/hardhat";
-import "@nomiclabs/hardhat-ethers";
 import "@nomicfoundation/hardhat-chai-matchers";
+import "@nomicfoundation/hardhat-foundry";
+import "@nomiclabs/hardhat-ethers";
+import "@typechain/hardhat";
 
 // extends hre with gmx domain data
 import "./config";
 
 // add test helper methods
-import "./utils/test";
 import { updateGlvConfig } from "./scripts/updateGlvConfigUtils";
 import { updateMarketConfig } from "./scripts/updateMarketConfigUtils";
+import "./utils/test";
 
 const getRpcUrl = (network) => {
   const defaultRpcs = {
@@ -34,6 +35,8 @@ const getRpcUrl = (network) => {
     avalancheFuji: "https://api.avax-test.network/ext/bc/C/rpc",
     snowtrace: "https://api.avax.network/ext/bc/C/rpc",
     arbitrumBlockscout: "https://arb1.arbitrum.io/rpc",
+    base: "https://mainnet.base.org",
+    baseSepolia: "https://sepolia.base.org",
   };
 
   let rpc = defaultRpcs[network];
@@ -58,6 +61,8 @@ export const getExplorerUrl = (network) => {
     arbitrumSepolia: "https://api-sepolia.arbiscan.io/",
     avalancheFuji: "https://api-testnet.snowtrace.io/",
     arbitrumBlockscout: "https://arbitrum.blockscout.com/api",
+    base: "https://api.basescan.org/api",
+    baseSepolia: "https://api-sepolia.basescan.org/api",
   };
 
   const url = urls[network];
@@ -103,7 +108,7 @@ const getEnvAccounts = (chainName?: string) => {
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: "0.8.18",
+    version: "0.8.24",
     settings: {
       optimizer: {
         enabled: true,
@@ -215,6 +220,48 @@ const config: HardhatUserConfig = {
       blockGasLimit: 2500000,
       // gasPrice: 50000000000,
     },
+    base: {
+      url: getRpcUrl("base"),
+      chainId: 8453,
+      accounts: getEnvAccounts(),
+      gas: "auto",
+      gasMultiplier: 1.2,
+      // Long deploy (~98 contracts); dRPC/load balancers can hit default headers timeouts.
+      timeout: 600_000,
+      verify: {
+        etherscan: {
+          apiUrl: getExplorerUrl("base"),
+          apiKey: process.env.BASESCAN_API_KEY,
+        },
+      },
+    },
+    baseSepolia: {
+      url: getRpcUrl("baseSepolia"),
+      chainId: 84532,
+      accounts: getEnvAccounts(),
+      gas: "auto",
+      gasMultiplier: 2.0,
+      verify: {
+        etherscan: {
+          apiUrl: getExplorerUrl("baseSepolia"),
+          apiKey: process.env.BASESCAN_API_KEY,
+        },
+      },
+    },
+    baseSepoliaFork: {
+      url: process.env.ANVIL_RPC_URL || "http://127.0.0.1:8545",
+      chainId: 84532,
+      accounts: process.env.FORK_DEPLOYER_KEY ? [process.env.FORK_DEPLOYER_KEY] : getEnvAccounts(),
+      gas: "auto",
+      gasMultiplier: 2.0,
+    },
+    baseFork: {
+      url: process.env.ANVIL_RPC_URL || "http://127.0.0.1:8545",
+      chainId: 8453,
+      accounts: process.env.FORK_DEPLOYER_KEY ? [process.env.FORK_DEPLOYER_KEY] : getEnvAccounts(),
+      gas: "auto",
+      gasMultiplier: 2.0,
+    },
   },
   // hardhat-deploy has issues with some contracts
   // https://github.com/wighawag/hardhat-deploy/issues/264
@@ -228,6 +275,8 @@ const config: HardhatUserConfig = {
       avalancheFujiTestnet: process.env.SNOWTRACE_API_KEY,
       snowtrace: "snowtrace", // apiKey is not required, just set a placeholder
       arbitrumBlockscout: "arbitrumBlockscout",
+      base: process.env.BASESCAN_API_KEY,
+      baseSepolia: process.env.BASESCAN_API_KEY,
     },
     customChains: [
       {
@@ -243,7 +292,7 @@ const config: HardhatUserConfig = {
         chainId: 421614,
         urls: {
           apiURL: "https://api-sepolia.arbiscan.io/api",
-          browserURL: "https://https://sepolia.arbiscan.io/",
+          browserURL: "https://sepolia.arbiscan.io/",
         },
       },
       // {

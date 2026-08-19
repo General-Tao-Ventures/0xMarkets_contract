@@ -1,4 +1,5 @@
 import { grantRoleIfNotGranted, revokeRoleIfGranted } from "../utils/role";
+import { configNetworkName } from "../utils/network";
 
 // example rolesToRemove format:
 // {
@@ -11,12 +12,10 @@ import { grantRoleIfNotGranted, revokeRoleIfGranted } from "../utils/role";
 // };
 
 const rolesToRemove = {
+  base: [],
+  baseSepolia: [],
   hardhat: [],
-  arbitrum: [],
-  avalanche: [],
-  avalancheFuji: [],
-  arbitrumGoerli: [],
-  arbitrumSepolia: [],
+  localhost: [],
 };
 
 const func = async ({ gmx, network }) => {
@@ -28,7 +27,9 @@ const func = async ({ gmx, network }) => {
     }
   }
 
-  const _rolesToRemove = rolesToRemove[network.name];
+  // Keyed by the chain being deployed to, so a fork reads its source chain's list rather
+  // than throwing on a name that was never a key here.
+  const _rolesToRemove = rolesToRemove[configNetworkName(network.name)] ?? [];
   for (const { account, role } of _rolesToRemove) {
     await revokeRoleIfGranted(account, role);
   }

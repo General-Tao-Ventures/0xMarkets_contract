@@ -6,6 +6,7 @@ import "../utils/Precision.sol";
 
 import "../data/DataStore.sol";
 import "../event/EventEmitter.sol";
+import "../market/MarketCollateralUtils.sol";
 
 import "../oracle/Oracle.sol";
 import "../pricing/PositionPricingUtils.sol";
@@ -223,7 +224,8 @@ library DecreasePositionUtils {
                     reason,
                     info.remainingCollateralUsd,
                     info.minCollateralUsd,
-                    info.minCollateralUsdForLeverage
+                    info.requiredCollateralUsd,
+                    info.mmr
                 );
             }
         }
@@ -245,6 +247,15 @@ library DecreasePositionUtils {
             cache.nextPositionSizeInUsd,
             cache.nextPositionBorrowingFactor
         );
+
+        // Insurance injection runs here ,after processCollateral has settled the
+        // position's pool deltas AND updateTotalBorrowing has reduced the pending
+        // borrowing aggregate, so the drawdown metric does not double-count the
+        // just-realized borrowing fee . Insolvent liquidations and
+        // ADL return cleanly from processCollateral (via handleEarlyReturn) and
+        // reach this point too, so the fund deploys during the bad-debt events it
+        // covers.
+        DecreasePositionCollateralUtils.maybeInjectInsurancePool(params, cache);
 
         params.position.setSizeInUsd(cache.nextPositionSizeInUsd);
         params.position.setSizeInTokens(params.position.sizeInTokens() - values.sizeDeltaInTokens);
@@ -272,7 +283,7 @@ library DecreasePositionUtils {
             PositionStoreUtils.set(params.contracts.dataStore, params.positionKey, params.position);
         }
 
-        MarketUtils.applyDeltaToCollateralSum(
+        MarketCollateralUtils.applyDeltaToCollateralSum(
             params.contracts.dataStore,
             params.contracts.eventEmitter,
             params.position.market(),
@@ -311,7 +322,8 @@ library DecreasePositionUtils {
                 params.market,
                 cache.prices,
                 false, // shouldValidateMinPositionSize
-                false // shouldValidateMinCollateralUsd
+                false, // shouldValidateMinCollateralUsd
+                false // shouldValidateMinLeverage — decreases/ADL lower leverage, never gate them
             );
         }
 

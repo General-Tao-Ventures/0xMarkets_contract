@@ -249,15 +249,6 @@ library SwapUtils {
             ? Keys.ATOMIC_SWAP_FEE_TYPE
             : Keys.SWAP_FEE_TYPE;
 
-        FeeUtils.incrementClaimableFeeAmount(
-            params.dataStore,
-            params.eventEmitter,
-            _params.market.marketToken,
-            _params.tokenIn,
-            fees.feeReceiverAmount,
-            swapFeeType
-        );
-
         FeeUtils.incrementClaimableUiFeeAmount(
             params.dataStore,
             params.eventEmitter,

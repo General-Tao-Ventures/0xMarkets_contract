@@ -2,9 +2,9 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts-v4/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-v4/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts-v4/token/ERC20/utils/SafeERC20.sol";
 
 import "../role/RoleModule.sol";
 import "../oracle/OracleModule.sol";
@@ -44,42 +44,6 @@ contract FeeHandler is ReentrancyGuard, RoleModule, OracleModule, BasicMulticall
         eventEmitter = _eventEmitter;
         vaultV1 = _vaultV1;
         gmx = _gmx;
-    }
-
-    // @dev withdraw fees in buybackTokens from this contract
-    // note that claimFees should be called to claim pending fees if needed
-    // before calling this function
-    // @param marketTokens the markets from which to withdraw fees
-    // @param buybackToken the token for which to withdraw fees
-    function withdrawFees(address buybackToken) external nonReentrant onlyFeeKeeper {
-        _validateBuybackToken(_getBatchSize(buybackToken), buybackToken);
-
-        address receiver = dataStore.getAddress(Keys.FEE_RECEIVER);
-
-        uint256 amount = dataStore.getUint(Keys.withdrawableBuybackTokenAmountKey(buybackToken));
-        dataStore.setUint(Keys.withdrawableBuybackTokenAmountKey(buybackToken), 0);
-
-        IERC20(buybackToken).safeTransfer(receiver, amount);
-    }
-
-    // @dev claim fees in feeToken from the specified markets
-    // @param market the market from which to claim fees
-    // @param feeToken the fee tokens to claim from the market
-    function claimFees(address market, address feeToken, uint256 version) external nonReentrant {
-        uint256 feeAmount;
-        if (version == v1) {
-            uint256 balanceBefore = IERC20(feeToken).balanceOf(address(this));
-            IVaultGovV1(vaultV1.gov()).withdrawFees(address(vaultV1), feeToken, address(this));
-            uint256 balanceAfter = IERC20(feeToken).balanceOf(address(this));
-            feeAmount = balanceAfter - balanceBefore;
-        } else if (version == v2) {
-            _validateMarket(market);
-            feeAmount = FeeUtils.claimFees(dataStore, eventEmitter, market, feeToken, address(this));
-        } else {
-            revert Errors.InvalidVersion(version);
-        }
-
-        _incrementAvailableFeeAmounts(version, feeToken, feeAmount);
     }
 
     // @dev receive an amount in feeToken by depositing the batchSize amount of the buybackToken

@@ -5,6 +5,8 @@ pragma solidity ^0.8.0;
 import "./BaseOrderHandler.sol";
 import "../error/ErrorUtils.sol";
 import "./IOrderHandler.sol";
+import "../market/MarketUtils.sol";
+import "../market/MarketStoreUtils.sol";
 import "../order/OrderUtils.sol";
 import "../order/ExecuteOrderUtils.sol";
 
@@ -33,15 +35,59 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
         _referralStorage
     ) {}
 
+    // @dev Reversed markets (e.g. EUR/USD stored internally as USD/EUR) report inverted oracle
+    //      prices, so user-supplied trigger/acceptable prices must be reciprocally inverted into the
+    //      internal price domain before storage. Shared by createOrder and updateOrder so the two
+    //      paths can never drift. Returns the (possibly inverted) prices plus
+    //      whether the market is reversed — createOrder uses the flag to also flip isLong; updateOrder
+    //      ignores it (direction is fixed at creation). No-op for the zero market or non-reversed.
+    // @return the trigger price, acceptable price, and whether the market is reversed
+    function _normalizeReversedPrices(
+        address market,
+        uint256 triggerPrice,
+        uint256 acceptablePrice,
+        bool requireEnabled
+    ) private view returns (uint256, uint256, bool reversed) {
+        if (market != address(0)) {
+            // Read `reversed` WITHOUT the enabled-market gate so this never reverts on a disabled
+            // market. createOrder passes requireEnabled=true to keep its long-standing "no creation
+            // on a disabled market" behavior; updateOrder passes false so updates/cancels of orders
+            // on a later-disabled market stay possible (it loaded no market at all before this fix).
+            Market.Props memory marketProps = MarketStoreUtils.get(dataStore, market);
+            if (requireEnabled) {
+                MarketUtils.validateEnabledMarket(dataStore, marketProps);
+            }
+            reversed = marketProps.reversed;
+            if (reversed) {
+                if (triggerPrice != 0) {
+                    triggerPrice = Precision.mulDiv(Precision.FLOAT_PRECISION, Precision.FLOAT_PRECISION, triggerPrice);
+                }
+                if (acceptablePrice != 0) {
+                    acceptablePrice =
+                        Precision.mulDiv(Precision.FLOAT_PRECISION, Precision.FLOAT_PRECISION, acceptablePrice);
+                }
+            }
+        }
+        return (triggerPrice, acceptablePrice, reversed);
+    }
+
     // @dev creates an order in the order store
     // @param account the order's account
     // @param params BaseOrderUtils.CreateOrderParams
     function createOrder(
         address account,
-        IBaseOrderUtils.CreateOrderParams calldata params,
+        IBaseOrderUtils.CreateOrderParams memory params,
         bool shouldCapMaxExecutionFee
     ) external override globalNonReentrant onlyController returns (bytes32) {
         FeatureUtils.validateFeature(dataStore, Keys.createOrderFeatureDisabledKey(address(this), uint256(params.orderType)));
+
+        bool reversed;
+        (params.numbers.triggerPrice, params.numbers.acceptablePrice, reversed) =
+            _normalizeReversedPrices(params.addresses.market, params.numbers.triggerPrice, params.numbers.acceptablePrice, true);
+        // Direction is inverted at creation only; the stored order keeps it (updateOrder must not re-flip).
+        if (reversed) {
+            params.isLong = !params.isLong;
+        }
 
         return OrderUtils.createOrder(
             dataStore,
@@ -113,6 +159,11 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
         }
         order.setAutoCancel(autoCancel);
 
+        // Mirror createOrder's reversed-market price normalization via the shared
+        // helper so the two paths can never drift. isLong is NOT touched — the order's direction was
+        // already inverted and stored at creation.
+        (triggerPrice, acceptablePrice,) = _normalizeReversedPrices(order.market(), triggerPrice, acceptablePrice, false);
+
         order.setSizeDeltaUsd(sizeDeltaUsd);
         order.setTriggerPrice(triggerPrice);
         order.setAcceptablePrice(acceptablePrice);
@@ -126,15 +177,22 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
         cache.wnt = TokenUtils.wnt(dataStore);
         cache.receivedWnt = orderVault.recordTransferIn(cache.wnt);
 
-        cache.estimatedGasLimit = GasUtils.estimateExecuteOrderGasLimit(dataStore, order);
-        cache.oraclePriceCount = GasUtils.estimateOrderOraclePriceCount(order.swapPath().length);
-        (uint256 executionFee, uint256 executionFeeDiff) = GasUtils.validateAndCapExecutionFee(
-            dataStore,
-            cache.estimatedGasLimit,
-            order.executionFee() + cache.receivedWnt,
-            cache.oraclePriceCount,
-            shouldCapMaxExecutionFee
-        );
+        // ! EXECUTION FEE EXEMPTION
+        // Minimum-fee validation waived (keepers subsidised out-of-band), so validateAndCapExecutionFee is
+        // not used. The MAX cap is still enforced for subaccount / relay updates carrying a callbackContract
+        // (shouldCapMaxExecutionFee): otherwise a malicious subaccount could raise the executionFee on an
+        // existing order with the victim's topped-up WNT and reclaim it to an attacker callbackContract on
+        // cancel. Excess over the cap is returned to the holding address.
+        uint256 executionFee = order.executionFee() + cache.receivedWnt;
+        uint256 executionFeeDiff = 0;
+        if (shouldCapMaxExecutionFee) {
+            (executionFee, executionFeeDiff) = GasUtils.capExecutionFee(
+                dataStore,
+                GasUtils.estimateExecuteOrderGasLimit(dataStore, order),
+                order.executionFee() + cache.receivedWnt,
+                GasUtils.estimateOrderOraclePriceCount(order.swapPath().length)
+            );
+        }
         order.setExecutionFee(executionFee);
 
         if (executionFeeDiff != 0) {
@@ -187,7 +245,8 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
                 startingGas,
                 true, // isExternalCall
                 Keys.USER_INITIATED_CANCEL,
-                ""
+                "",
+                false // skipCallback: user cancellations keep their callback
             )
         );
     }
@@ -225,6 +284,10 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
         withOraclePrices(oracleParams)
     {
         uint256 startingGas = gasleft();
+
+        // hold off execution until the L2 sequencer grace window has passed, matching liquidations
+        // and withdrawals, so orders cannot execute on prices from right after a sequencer outage
+        oracle.validateSequencerUp();
 
         Order.Props memory order = OrderStoreUtils.get(dataStore, key);
         uint256 estimatedGasLimit = GasUtils.estimateExecuteOrderGasLimit(dataStore, order);
@@ -346,7 +409,8 @@ contract OrderHandler is IOrderHandler, BaseOrderHandler {
                     startingGas,
                     true, // isExternalCall
                     reason,
-                    reasonBytes
+                    reasonBytes,
+                    false // skipCallback: normal cancellations keep their callback
                 )
             );
 

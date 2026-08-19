@@ -1,9 +1,11 @@
+import { BigNumberish } from "ethers";
+
 import { hashString, hashData } from "./hash";
 
+export const USDC = hashString("USDC");
 export const WNT = hashString("WNT");
 export const NONCE = hashString("NONCE");
 
-export const FEE_RECEIVER = hashString("FEE_RECEIVER");
 export const HOLDING_ADDRESS = hashString("HOLDING_ADDRESS");
 export const SEQUENCER_GRACE_DURATION = hashString("SEQUENCER_GRACE_DURATION");
 export const IN_STRICT_PRICE_FEED_MODE = hashString("IN_STRICT_PRICE_FEED_MODE");
@@ -73,6 +75,7 @@ export const CLAIMABLE_FUNDING_AMOUNT = hashString("CLAIMABLE_FUNDING_AMOUNT");
 export const CLAIMABLE_COLLATERAL_AMOUNT = hashString("CLAIMABLE_COLLATERAL_AMOUNT");
 export const CLAIMABLE_COLLATERAL_FACTOR = hashString("CLAIMABLE_COLLATERAL_FACTOR");
 export const CLAIMABLE_COLLATERAL_TIME_DIVISOR = hashString("CLAIMABLE_COLLATERAL_TIME_DIVISOR");
+export const CLAIMABLE_COLLATERAL_DELAY = hashString("CLAIMABLE_COLLATERAL_DELAY");
 
 export const CLAIMABLE_UI_FEE_AMOUNT = hashString("CLAIMABLE_UI_FEE_AMOUNT");
 export const AFFILIATE_REWARD = hashString("AFFILIATE_REWARD");
@@ -97,14 +100,20 @@ export const IS_ORACLE_PROVIDER_ENABLED = hashString("IS_ORACLE_PROVIDER_ENABLED
 export const IS_ATOMIC_ORACLE_PROVIDER = hashString("IS_ATOMIC_ORACLE_PROVIDER");
 export const CHAINLINK_PAYMENT_TOKEN = hashString("CHAINLINK_PAYMENT_TOKEN");
 
-export const MIN_COLLATERAL_FACTOR = hashString("MIN_COLLATERAL_FACTOR");
+// MAX_LEVERAGE already declared at the top of this file — do not redeclare
+export const MIN_LEVERAGE = hashString("MIN_LEVERAGE");
+export const MIN_MMR = hashString("MIN_MMR");
+export const MAX_MMR = hashString("MAX_MMR");
+export const MMR_TUNING = hashString("MMR_TUNING");
+export const LEVERAGE_LADDER_TIER_COUNT = hashString("LEVERAGE_LADDER_TIER_COUNT");
+export const LEVERAGE_LADDER_MAX_NOTIONAL = hashString("LEVERAGE_LADDER_MAX_NOTIONAL");
+export const LEVERAGE_LADDER_MAX_LEVERAGE = hashString("LEVERAGE_LADDER_MAX_LEVERAGE");
 export const MIN_COLLATERAL_FACTOR_FOR_OPEN_INTEREST_MULTIPLIER = hashString(
   "MIN_COLLATERAL_FACTOR_FOR_OPEN_INTEREST_MULTIPLIER"
 );
 export const MIN_COLLATERAL_USD = hashString("MIN_COLLATERAL_USD");
 export const MIN_POSITION_SIZE_USD = hashString("MIN_POSITION_SIZE_USD");
 
-export const SWAP_FEE_RECEIVER_FACTOR = hashString("SWAP_FEE_RECEIVER_FACTOR");
 export const ATOMIC_SWAP_FEE_TYPE = hashString("ATOMIC_SWAP_FEE_TYPE");
 export const TOKEN_TRANSFER_GAS_LIMIT = hashString("TOKEN_TRANSFER_GAS_LIMIT");
 export const NATIVE_TOKEN_TRANSFER_GAS_LIMIT = hashString("NATIVE_TOKEN_TRANSFER_GAS_LIMIT");
@@ -117,6 +126,7 @@ export const PRICE_FEED = hashString("PRICE_FEED");
 export const PRICE_FEED_MULTIPLIER = hashString("PRICE_FEED_MULTIPLIER");
 export const PRICE_FEED_HEARTBEAT_DURATION = hashString("PRICE_FEED_HEARTBEAT_DURATION");
 export const DATA_STREAM_ID = hashString("DATA_STREAM_ID");
+export const DATA_STREAM_INVERTED = hashString("DATA_STREAM_INVERTED");
 export const DATA_STREAM_MULTIPLIER = hashString("DATA_STREAM_MULTIPLIER");
 export const DATA_STREAM_SPREAD_REDUCTION_FACTOR = hashString("DATA_STREAM_SPREAD_REDUCTION_FACTOR");
 export const STABLE_PRICE = hashString("STABLE_PRICE");
@@ -141,9 +151,25 @@ export const POSITION_IMPACT_POOL_DISTRIBUTED_AT = hashString("POSITION_IMPACT_P
 
 export const SWAP_IMPACT_POOL_AMOUNT = hashString("SWAP_IMPACT_POOL_AMOUNT");
 
-export const POSITION_FEE_RECEIVER_FACTOR = hashString("POSITION_FEE_RECEIVER_FACTOR");
-export const LIQUIDATION_FEE_RECEIVER_FACTOR = hashString("LIQUIDATION_FEE_RECEIVER_FACTOR");
-export const BORROWING_FEE_RECEIVER_FACTOR = hashString("BORROWING_FEE_RECEIVER_FACTOR");
+export const POSITION_FEE_VEALPHA_FACTOR = hashString("POSITION_FEE_VEALPHA_FACTOR");
+export const POSITION_FEE_TREASURY_FACTOR = hashString("POSITION_FEE_TREASURY_FACTOR");
+export const POSITION_FEE_BUYBACK_FACTOR = hashString("POSITION_FEE_BUYBACK_FACTOR");
+export const LIQUIDATION_FEE_VALIDATOR_FACTOR = hashString("LIQUIDATION_FEE_VALIDATOR_FACTOR");
+export const LIQUIDATION_FEE_INSURANCE_FACTOR = hashString("LIQUIDATION_FEE_INSURANCE_FACTOR");
+export const LIQUIDATION_FEE_BUYBACK_FACTOR = hashString("LIQUIDATION_FEE_BUYBACK_FACTOR");
+export const VEALPHA_FEE_RECEIVER = hashString("VEALPHA_FEE_RECEIVER");
+export const TREASURY_FEE_RECEIVER = hashString("TREASURY_FEE_RECEIVER");
+export const BUYBACK_FEE_RECEIVER = hashString("BUYBACK_FEE_RECEIVER");
+export const VALIDATOR_FEE_RECEIVER = hashString("VALIDATOR_FEE_RECEIVER");
+export const INSURANCE_FUND_ADDRESS = hashString("INSURANCE_FUND_ADDRESS");
+
+export const INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR = hashString("INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR");
+export const INSURANCE_FUND_BALANCE = hashString("INSURANCE_FUND_BALANCE");
+export const INSURANCE_FUND_EPOCH_POOL_VALUE = hashString("INSURANCE_FUND_EPOCH_POOL_VALUE");
+export const INSURANCE_FUND_EPOCH_SUPPLY = hashString("INSURANCE_FUND_EPOCH_SUPPLY");
+export const INSURANCE_FUND_EPOCH_START = hashString("INSURANCE_FUND_EPOCH_START");
+export const INSURANCE_FUND_MAX_EPOCH_AGE = hashString("INSURANCE_FUND_MAX_EPOCH_AGE");
+export const INSURANCE_FUND_EPOCH_LENGTH = hashString("INSURANCE_FUND_EPOCH_LENGTH");
 
 export const SWAP_FEE_FACTOR = hashString("SWAP_FEE_FACTOR");
 export const DEPOSIT_FEE_FACTOR = hashString("DEPOSIT_FEE_FACTOR");
@@ -261,6 +287,19 @@ export const WITHDRAWABLE_BUYBACK_TOKEN_AMOUNT = hashString("WITHDRAWABLE_BUYBAC
 
 export const VALID_FROM_TIME = hashString("VALID_FROM_TIME");
 
+export const ASSET_TOKEN = hashString("ASSET_TOKEN");
+
+export const BASELINE_SWAP_LONGS_PAY_SHORTS = hashString("BASELINE_SWAP_LONGS_PAY_SHORTS");
+export const BASELINE_SWAP_PER_DAY = hashString("BASELINE_SWAP_PER_DAY");
+
+export const PYTH_LAZER_FEED_ID = hashString("PYTH_LAZER_FEED_ID");
+export const PYTH_LAZER_FEED_INVERTED = hashString("PYTH_LAZER_FEED_INVERTED");
+export const MAX_RELAY_FEE_SWAP_USD_FOR_SUBACCOUNT = hashString("MAX_RELAY_FEE_SWAP_USD_FOR_SUBACCOUNT");
+export const PYTH_LAZER_FEED_MULTIPLIER = hashString("PYTH_LAZER_FEED_MULTIPLIER");
+export const PYTH_LAZER_FEED_EXPONENT = hashString("PYTH_LAZER_FEED_EXPONENT");
+export const PYTH_LAZER_FEED_SPREAD_FACTOR = hashString("PYTH_LAZER_FEED_SPREAD_FACTOR");
+export const PYTH_HERMES_FEED_MULTIPLIER = hashString("PYTH_HERMES_FEED_MULTIPLIER");
+
 export function accountDepositListKey(account) {
   return hashData(["bytes32", "address"], [ACCOUNT_DEPOSIT_LIST, account]);
 }
@@ -313,6 +352,14 @@ export function executeDepositFeatureDisabledKey(contract) {
   return hashData(["bytes32", "address"], [EXECUTE_DEPOSIT_FEATURE_DISABLED, contract]);
 }
 
+export function executeWithdrawalFeatureDisabledKey(contract) {
+  return hashData(["bytes32", "address"], [EXECUTE_WITHDRAWAL_FEATURE_DISABLED, contract]);
+}
+
+export function executeAtomicWithdrawalFeatureDisabledKey(contract) {
+  return hashData(["bytes32", "address"], [EXECUTE_ATOMIC_WITHDRAWAL_FEATURE_DISABLED, contract]);
+}
+
 export function createOrderFeatureDisabledKey(contract, orderType) {
   return hashData(["bytes32", "address", "uint256"], [CREATE_ORDER_FEATURE_DISABLED, contract, orderType]);
 }
@@ -333,8 +380,11 @@ export function cancelOrderFeatureDisabledKey(contract, orderType) {
   return hashData(["bytes32", "address", "uint256"], [CANCEL_ORDER_FEATURE_DISABLED, contract, orderType]);
 }
 
-export function claimableFeeAmountKey(market: string, token: string) {
-  return hashData(["bytes32", "address", "address"], [CLAIMABLE_FEE_AMOUNT, market, token]);
+export function claimableFeeAmountKey(market: string, token: string, receiver?: string) {
+  if (receiver === undefined) {
+    return hashData(["bytes32", "address", "address"], [CLAIMABLE_FEE_AMOUNT, market, token]);
+  }
+  return hashData(["bytes32", "address", "address", "address"], [CLAIMABLE_FEE_AMOUNT, market, token, receiver]);
 }
 
 export function claimableFundingAmountKey(market: string, token: string, account: string) {
@@ -399,6 +449,10 @@ export function dataStreamIdKey(token: string) {
   return hashData(["bytes32", "address"], [DATA_STREAM_ID, token]);
 }
 
+export function dataStreamInvertedKey(token: string) {
+  return hashData(["bytes32", "address"], [DATA_STREAM_INVERTED, token]);
+}
+
 export function dataStreamMultiplierKey(token: string) {
   return hashData(["bytes32", "address"], [DATA_STREAM_MULTIPLIER, token]);
 }
@@ -442,8 +496,36 @@ export function isAtomicOracleProviderKey(provider: string) {
   return hashData(["bytes32", "address"], [IS_ATOMIC_ORACLE_PROVIDER, provider]);
 }
 
-export function minCollateralFactorKey(market: string) {
-  return hashData(["bytes32", "address"], [MIN_COLLATERAL_FACTOR, market]);
+export function maxLeverageKey(market: string) {
+  return hashData(["bytes32", "address"], [MAX_LEVERAGE, market]);
+}
+
+export function minLeverageKey(market: string) {
+  return hashData(["bytes32", "address"], [MIN_LEVERAGE, market]);
+}
+
+export function leverageLadderTierCountKey(market: string) {
+  return hashData(["bytes32", "address"], [LEVERAGE_LADDER_TIER_COUNT, market]);
+}
+
+export function leverageLadderMaxNotionalKey(market: string, tierIndex: BigNumberish) {
+  return hashData(["bytes32", "address", "uint256"], [LEVERAGE_LADDER_MAX_NOTIONAL, market, tierIndex]);
+}
+
+export function leverageLadderMaxLeverageKey(market: string, tierIndex: BigNumberish) {
+  return hashData(["bytes32", "address", "uint256"], [LEVERAGE_LADDER_MAX_LEVERAGE, market, tierIndex]);
+}
+
+export function minMmrKey(market: string) {
+  return hashData(["bytes32", "address"], [MIN_MMR, market]);
+}
+
+export function maxMmrKey(market: string) {
+  return hashData(["bytes32", "address"], [MAX_MMR, market]);
+}
+
+export function mmrTuningKey(market: string) {
+  return hashData(["bytes32", "address"], [MMR_TUNING, market]);
 }
 
 export function minCollateralFactorForOpenInterestMultiplierKey(market: string, isLong: boolean) {
@@ -468,6 +550,13 @@ export function minPnlFactorAfterAdl(market: string, isLong: boolean) {
 
 export function collateralSumKey(market: string, collateralToken: string, isLong: boolean) {
   return hashData(["bytes32", "address", "address", "bool"], [COLLATERAL_SUM, market, collateralToken, isLong]);
+}
+
+export const REVERSED = hashString("REVERSED");
+
+// Mirrors MarketStoreUtils: keccak256(abi.encode(marketToken, REVERSED)).
+export function reversedKey(market: string) {
+  return hashData(["address", "bytes32"], [market, REVERSED]);
 }
 
 export function poolAmountKey(market: string, token: string) {
@@ -560,6 +649,26 @@ export function proDiscountFactorKey(proTier: number) {
 
 export function liquidationFeeFactorKey(market: string) {
   return hashData(["bytes32", "address"], [LIQUIDATION_FEE_FACTOR, market]);
+}
+
+export function insuranceFundDrawdownTriggerFactorKey(market: string) {
+  return hashData(["bytes32", "address"], [INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR, market]);
+}
+
+export function insuranceFundBalanceKey(market: string, token: string) {
+  return hashData(["bytes32", "address", "address"], [INSURANCE_FUND_BALANCE, market, token]);
+}
+
+export function insuranceFundEpochPoolValueKey(market: string) {
+  return hashData(["bytes32", "address"], [INSURANCE_FUND_EPOCH_POOL_VALUE, market]);
+}
+
+export function insuranceFundEpochSupplyKey(market: string) {
+  return hashData(["bytes32", "address"], [INSURANCE_FUND_EPOCH_SUPPLY, market]);
+}
+
+export function insuranceFundEpochStartKey(market: string) {
+  return hashData(["bytes32", "address"], [INSURANCE_FUND_EPOCH_START, market]);
 }
 
 export function latestAdlBlockKey(market: string, isLong: boolean) {
@@ -803,4 +912,40 @@ export function buybackMaxPriceImpactFactorKey(token: string) {
 
 export function withdrawableBuybackTokenAmountKey(buybackToken: string) {
   return hashData(["bytes32", "address"], [WITHDRAWABLE_BUYBACK_TOKEN_AMOUNT, buybackToken]);
+}
+
+export function assetTokenKey(asset: string) {
+  return hashData(["bytes32", "string"], [ASSET_TOKEN, asset]);
+}
+
+export function baselineSwapLongsPayShortsKey(market: string) {
+  return hashData(["bytes32", "address"], [BASELINE_SWAP_LONGS_PAY_SHORTS, market]);
+}
+
+export function baselineSwapPerDayKey(market: string) {
+  return hashData(["bytes32", "address"], [BASELINE_SWAP_PER_DAY, market]);
+}
+
+export function pythLazerFeedIdKey(token: string) {
+  return hashData(["bytes32", "address"], [PYTH_LAZER_FEED_ID, token]);
+}
+
+export function pythLazerFeedInvertedKey(token: string) {
+  return hashData(["bytes32", "address"], [PYTH_LAZER_FEED_INVERTED, token]);
+}
+
+export function pythLazerFeedMultiplierKey(token: string) {
+  return hashData(["bytes32", "address"], [PYTH_LAZER_FEED_MULTIPLIER, token]);
+}
+
+export function pythLazerFeedExponentKey(token: string) {
+  return hashData(["bytes32", "address"], [PYTH_LAZER_FEED_EXPONENT, token]);
+}
+
+export function pythLazerFeedSpreadFactorKey(token: string) {
+  return hashData(["bytes32", "address"], [PYTH_LAZER_FEED_SPREAD_FACTOR, token]);
+}
+
+export function pythHermesFeedMultiplierKey(token: string) {
+  return hashData(["bytes32", "address"], [PYTH_HERMES_FEED_MULTIPLIER, token]);
 }

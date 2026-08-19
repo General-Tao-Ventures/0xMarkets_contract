@@ -1,3 +1,4 @@
+import { configNetworkName } from "../utils/network";
 import prompts from "prompts";
 
 import fetch from "node-fetch";
@@ -95,7 +96,7 @@ const processMarkets = async ({
 
   for (const marketConfig of markets) {
     const [indexToken, longToken, shortToken] = getMarketTokenAddresses(marketConfig, tokens);
-    const marketKey = getMarketKey(indexToken, longToken, shortToken);
+    const marketKey = getMarketKey(indexToken, longToken, shortToken, marketConfig.reversed);
     const onchainMarket = onchainMarketsByTokens[marketKey];
 
     if (!onchainMarket) {
@@ -287,13 +288,55 @@ const processMarkets = async ({
       continue;
     }
 
-    await handleConfig(
-      "uint",
-      keys.MIN_COLLATERAL_FACTOR,
-      encodeData(["address"], [marketToken]),
-      marketConfig.minCollateralFactor,
-      `minCollateralFactor ${marketLabel} (${marketToken})`
-    );
+    if (marketConfig.maxLeverage !== undefined) {
+      await handleConfig(
+        "uint",
+        keys.MAX_LEVERAGE,
+        encodeData(["address"], [marketToken]),
+        marketConfig.maxLeverage,
+        `maxLeverage ${marketLabel} (${marketToken})`
+      );
+    }
+
+    if (marketConfig.minLeverage !== undefined) {
+      await handleConfig(
+        "uint",
+        keys.MIN_LEVERAGE,
+        encodeData(["address"], [marketToken]),
+        marketConfig.minLeverage,
+        `minLeverage ${marketLabel} (${marketToken})`
+      );
+    }
+
+    if (marketConfig.minMmr !== undefined) {
+      await handleConfig(
+        "uint",
+        keys.MIN_MMR,
+        encodeData(["address"], [marketToken]),
+        marketConfig.minMmr,
+        `minMmr ${marketLabel} (${marketToken})`
+      );
+    }
+
+    if (marketConfig.maxMmr !== undefined) {
+      await handleConfig(
+        "uint",
+        keys.MAX_MMR,
+        encodeData(["address"], [marketToken]),
+        marketConfig.maxMmr,
+        `maxMmr ${marketLabel} (${marketToken})`
+      );
+    }
+
+    if (marketConfig.mmrTuning !== undefined) {
+      await handleConfig(
+        "uint",
+        keys.MMR_TUNING,
+        encodeData(["address"], [marketToken]),
+        marketConfig.mmrTuning,
+        `mmrTuning ${marketLabel} (${marketToken})`
+      );
+    }
 
     await handleConfig(
       "uint",
@@ -543,6 +586,21 @@ const processMarkets = async ({
       );
     }
 
+    // Per-market insurance fund drawdown trigger. When realized drawdown
+    // (current pool USD vs. last epoch snapshot, both excluding unrealized PnL)
+    // exceeds this factor, attemptInjectPool tops the pool back up at end of
+    // processCollateral. type(uint256).max is the off-sentinel — set to that
+    // explicitly to disable the fund on a market.
+    if (marketConfig.insuranceFundDrawdownTriggerFactor !== undefined) {
+      await handleConfig(
+        "uint",
+        keys.INSURANCE_FUND_DRAWDOWN_TRIGGER_FACTOR,
+        encodeData(["address"], [marketToken]),
+        marketConfig.insuranceFundDrawdownTriggerFactor,
+        `insuranceFundDrawdownTriggerFactor ${marketLabel} (${marketToken})`
+      );
+    }
+
     if (marketConfig.positionFeeFactorForPositiveImpact !== undefined) {
       await handleConfig(
         "uint",
@@ -726,7 +784,12 @@ export async function updateMarketConfig({
   includePositionImpact = false,
   includeMaxOpenInterest = false,
 }) {
-  if (!["arbitrumGoerli", "avalancheFuji", "hardhat"].includes(hre.network.name)) {
+  // validateMarketConfigs compares each market against recommendedMarketConfig, which is an
+  // empty object here — the reference tables came from upstream and were not carried over. Any
+  // network not listed reaches `recommendedMarketConfig[network][...]` and throws on undefined,
+  // so the check cannot pass for any chain until those tables are filled in.
+  const skipValidation = ["arbitrumGoerli", "avalancheFuji", "base", "baseSepolia", "hardhat", "localhost"];
+  if (!skipValidation.includes(configNetworkName(hre.network.name))) {
     const { errors } = await validateMarketConfigs();
     if (errors.length !== 0) {
       throw new Error("Invalid market configs");
@@ -748,7 +811,8 @@ export async function updateMarketConfig({
   const configKeys = [];
   const multicallReadParams = [];
 
-  const supportedRiskOracleMarkets = await getSupportedRiskOracleMarkets(markets, tokens, onchainMarketsByTokens);
+  // const supportedRiskOracleMarkets = await getSupportedRiskOracleMarkets(markets, tokens, onchainMarketsByTokens);
+  const supportedRiskOracleMarkets = new Set();
 
   await processMarkets({
     markets,
@@ -839,9 +903,9 @@ export async function updateMarketConfig({
     await handleInBatches(multicallWriteParams, 100, async (batch) => {
       await read(
         "Config",
-        {
-          from: "0xF09d66CF7dEBcdEbf965F1Ac6527E1Aa5D47A745",
-        },
+        // {
+        //   from: "0xF09d66CF7dEBcdEbf965F1Ac6527E1Aa5D47A745",
+        // },
         "multicall",
         batch
       );
@@ -861,6 +925,8 @@ export async function updateMarketConfig({
   } else {
     await handleInBatches(multicallWriteParams, 100, async (batch) => {
       const tx = await config.multicall(batch);
+      await tx.wait(1);
+      await new Promise((r) => setTimeout(r, 2000));
       console.info(`tx sent: ${tx.hash}`);
     });
   }

@@ -1,5 +1,7 @@
-import { grantRoleIfNotGranted } from "../utils/role";
+import { configNetworkName } from "../utils/network";
+import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { createDeployFunction } from "../utils/deploy";
+import { grantRoleIfNotGranted } from "../utils/role";
 
 const constructorContracts = ["RoleStore", "Config", "DataStore", "EventEmitter"];
 
@@ -9,7 +11,7 @@ const func = createDeployFunction({
   getDeployArgs: async ({ dependencyContracts, gmx, network, get }) => {
     const riskOracleConfig = await gmx.getRiskOracle();
     let riskOracleAddress = riskOracleConfig.riskOracle;
-    if (network.name === "hardhat") {
+    if (network.name === "hardhat" || configNetworkName(network.name) === "localhost") {
       const riskOracle = await get("MockRiskOracle");
       riskOracleAddress = riskOracle.address;
     }
@@ -27,5 +29,13 @@ const func = createDeployFunction({
 });
 
 func.dependencies = func.dependencies.concat(["MockRiskOracle"]);
+
+func.skip = async ({ network }: HardhatRuntimeEnvironment) => {
+  return (
+    configNetworkName(network.name) === "base" ||
+    configNetworkName(network.name) === "baseSepolia" ||
+    configNetworkName(network.name) === "localhost"
+  );
+};
 
 export default func;

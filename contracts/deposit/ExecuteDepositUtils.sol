@@ -16,7 +16,12 @@ import "../position/PositionUtils.sol";
 import "../gas/GasUtils.sol";
 import "../callback/CallbackUtils.sol";
 
+import "../insurance/InsuranceFundUtils.sol";
+import "../insurance/InsuranceVault.sol";
+
 import "../utils/Array.sol";
+
+import "hardhat/console.sol";
 
 // @title DepositUtils
 // @dev Library for deposit functions, to help with the depositing of liquidity
@@ -146,6 +151,31 @@ library ExecuteDepositUtils {
             cache.market,
             cache.prices
         );
+
+        // Settle any pending insurance injection into the pool BEFORE the deposit
+        // is priced. The injection recapitalises the pool toward its trigger
+        // threshold; pricing the newly minted GM afterwards means the depositor
+        // pays the post-injection (fair) price. Without this, a depositor entering
+        // after a realized loss mints GM at the depressed price and then captures
+        // the recapitalisation — extracting insurance reserves they never bore the
+        // loss for, at existing LPs' expense (ZEROMARK-266). No-op outside an
+        // active drawdown (no snapshot / drawdown at-or-below trigger / fund off).
+        {
+            address insuranceFundVault = params.dataStore.getAddress(Keys.INSURANCE_FUND_ADDRESS);
+            if (insuranceFundVault != address(0)) {
+                // A deposit has no position pnlToken; attemptInjectPool draws from
+                // both pool-token reserve buckets regardless of which is passed.
+                InsuranceFundUtils.attemptInjectPool(
+                    params.dataStore,
+                    params.eventEmitter,
+                    InsuranceVault(payable(insuranceFundVault)),
+                    cache.market,
+                    cache.prices,
+                    cache.market.longToken,
+                    params.key
+                );
+            }
+        }
 
         // deposits should improve the pool state but it should be checked if
         // the max pnl factor for deposits is exceeded as this would lead to the
@@ -279,17 +309,21 @@ library ExecuteDepositUtils {
         cache.callbackEventData.uintItems.setItem(0, "receivedMarketTokens", cache.receivedMarketTokens);
         CallbackUtils.afterDepositExecution(params.key, deposit, cache.callbackEventData);
 
-        GasUtils.payExecutionFee(
+        // ! EXECUTION FEE EXEMPTION
+        // Keeper is subsidised out-of-band (payExecutionFee is not called), but
+        // any fee sent with the deposit is refunded to the depositor (account) on
+        // success so it is not stranded in the vault (ZEROMARK-8). Refund goes to
+        // account, not receiver: a first deposit forces receiver == address(1), so
+        // refunding to receiver would strand the fee. No-op when the fee is zero.
+        // Symmetric with the cancellation path.
+        GasUtils.refundExecutionFee(
             params.dataStore,
             params.eventEmitter,
             params.depositVault,
             params.key,
             deposit.callbackContract(),
             deposit.executionFee(),
-            params.startingGas,
-            GasUtils.estimateDepositOraclePriceCount(deposit.longTokenSwapPath().length + deposit.shortTokenSwapPath().length),
-            params.keeper,
-            deposit.receiver()
+            deposit.account()
         );
 
         return cache.receivedMarketTokens;
@@ -308,15 +342,6 @@ library ExecuteDepositUtils {
             _params.priceImpactUsd > 0, // forPositiveImpact
             _params.uiFeeReceiver,
             params.swapPricingType
-        );
-
-        FeeUtils.incrementClaimableFeeAmount(
-            params.dataStore,
-            params.eventEmitter,
-            _params.market.marketToken,
-            _params.tokenIn,
-            fees.feeReceiverAmount,
-            Keys.DEPOSIT_FEE_TYPE
         );
 
         FeeUtils.incrementClaimableUiFeeAmount(
@@ -524,6 +549,19 @@ library ExecuteDepositUtils {
             params.dataStore,
             swapPath
         );
+
+        // Checkpoint each swap-path market before its pool amounts move. Borrowing accrues over the
+        // elapsed interval at a rate derived from current pool usage, so a swap that grows the pool
+        // first would let the whole stale interval be charged at the post-swap rate, undercollecting
+        // fees owed to that market's LPs. Only the destination market is checkpointed above.
+        for (uint256 i; i < swapPathMarkets.length; i++) {
+            PositionUtils.updateFundingAndBorrowingState(
+                params.dataStore,
+                params.eventEmitter,
+                swapPathMarkets[i],
+                MarketUtils.getMarketPrices(params.oracle, swapPathMarkets[i])
+            );
+        }
 
         (address outputToken, uint256 outputAmount) = SwapUtils.swap(
             SwapUtils.SwapParams(

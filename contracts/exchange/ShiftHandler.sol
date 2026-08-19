@@ -73,6 +73,10 @@ contract ShiftHandler is IShiftHandler, BaseHandler {
     {
         uint256 startingGas = gasleft();
 
+        // hold off execution until the L2 sequencer grace window has passed, matching liquidations
+        // and withdrawals, so shifts cannot execute on prices from right after a sequencer outage
+        oracle.validateSequencerUp();
+
         Shift.Props memory shift = ShiftStoreUtils.get(dataStore, key);
         uint256 estimatedGasLimit = GasUtils.estimateExecuteShiftGasLimit(dataStore, shift);
         GasUtils.validateExecutionGas(dataStore, startingGas, estimatedGasLimit);

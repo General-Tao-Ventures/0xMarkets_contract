@@ -95,16 +95,18 @@ library ExecuteOrderUtils {
 
         // the order.executionFee for liquidation / adl orders is zero
         // gas costs for liquidations / adl is subsidised by the treasury
-        GasUtils.payExecutionFee(
+        // ! EXECUTION FEE EXEMPTION
+        // Keeper is subsidised out-of-band (payExecutionFee is not called), but
+        // any fee sent with the order is refunded to the receiver on success so
+        // it is not stranded in the vault. No-op when the fee is
+        // zero (the liquidation / ADL case above, and any fee-exempt order).
+        GasUtils.refundExecutionFee(
             params.contracts.dataStore,
             params.contracts.eventEmitter,
             params.contracts.orderVault,
             params.key,
             params.order.callbackContract(),
             params.order.executionFee(),
-            params.startingGas,
-            GasUtils.estimateOrderOraclePriceCount(params.order.swapPath().length),
-            params.keeper,
             params.order.receiver()
         );
 
