@@ -119,6 +119,14 @@ contract RoleModule {
     }
 
     /**
+     * @dev Only allows addresses with the RELAY_KEEPER role to call the function.
+     */
+    modifier onlyRelayKeeper() {
+        _validateRole(Role.RELAY_KEEPER, "RELAY_KEEPER");
+        _;
+    }
+
+    /**
      * @dev Only allows addresses with the PRICING_KEEPER role to call the function.
      */
     modifier onlyPricingKeeper() {
