@@ -548,10 +548,20 @@ const baseMainnetMarketConfig: Partial<BaseMarketConfig> = {
 
   minCollateralUsd: decimalToFloat(5, 0),
 
-  aboveOptimalUsageBorrowingFactor: 0,
-  baseBorrowingFactor: 0,
-  optimalUsageFactor: 0,
-  borrowingFactor: exponentToFloat("5.6e-10").div(SECONDS_PER_DAY),
+  // Utilisation-based borrow fee. A non-zero optimalUsageFactor is the switch: it makes
+  // getBorrowingFactorPerSecond return from getKinkBorrowingFactor before borrowingFactor or
+  // borrowingExponentFactor are read, so the scale-dependent legacy curve is retired.
+  //
+  // baseBorrowingFactor is the slope below the bend, not the fee at it: 80% x 6.25% = 5%/yr there.
+  // aboveOptimalUsageBorrowingFactor is the fee at 100% utilisation directly.
+  //
+  // borrowingFactor stays at 0 so that if optimalUsageFactor is ever reset the exchange charges
+  // nothing rather than silently resuming the old formula. A zero fee gets noticed, a wrong one
+  // does not.
+  optimalUsageFactor: percentageToFloat("80%"),
+  baseBorrowingFactor: percentageToFloat("6.25%").div(SECONDS_PER_YEAR),
+  aboveOptimalUsageBorrowingFactor: percentageToFloat("15%").div(SECONDS_PER_YEAR),
+  borrowingFactor: 0,
   borrowingExponentFactor: exponentToFloat("1.73e0"),
 
   minLeverage: decimalToFloat(1),
