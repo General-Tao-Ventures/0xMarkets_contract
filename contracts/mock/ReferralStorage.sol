@@ -24,8 +24,10 @@ contract ReferralStorage is IReferralStorage, Governable {
 
     // @dev mapping of referral code to affiliate
     mapping (bytes32 => address) public override codeOwners;
-    // @dev mapping of trader to referral code
-    mapping (address => bytes32) public override traderReferralCodes;
+    // @dev mapping of trader to referral code.
+    // Private: reads go through traderReferralCodes(), which suppresses a self-referral. See the
+    // getter for why the check lives there rather than in the fee path.
+    mapping (address => bytes32) private _traderReferralCodes;
 
     // @param handler the handler being set
     // @param isActive whether the handler is being set to active or inactive
@@ -99,16 +101,44 @@ contract ReferralStorage is IReferralStorage, Governable {
         emit SetReferrerDiscountShare(msg.sender, _discountShare);
     }
 
+    // @dev the trader's referral code, or bytes32(0) if the trader owns the code themselves.
+    //
+    // Self-referral is suppressed HERE, in the read the fee path already performs, rather than in
+    // ReferralUtils.getReferralInfo. That function is `internal`, so it is compiled into every
+    // caller and changing it would force redeploying the whole fee stack; this getter is one
+    // contract. The effect is identical: getReferralInfo sees an empty code, resolves no affiliate,
+    // and takes its existing no-rebate path — so a self-referred trade settles as ordinary
+    // unreferred flow and NEVER reverts. Ownership can move after attach (see setCodeOwner), which
+    // is why this is evaluated on every read instead of only at attach time.
+    function traderReferralCodes(address _account) public view override returns (bytes32) {
+        bytes32 code = _traderReferralCodes[_account];
+        if (codeOwners[code] == _account) { return bytes32(0); }
+        return code;
+    }
+
+    // @dev the raw stored code, ignoring the self-referral suppression above. For off-chain
+    // reconciliation and support; never use this to price a trade.
+    function traderReferralCodesRaw(address _account) external view returns (bytes32) {
+        return _traderReferralCodes[_account];
+    }
+
     // @dev set the referral code for a trader
     // @param _account the address of the trader
     // @param _code the referral code to set to
+    // Called by a handler during order creation, so it must never revert: a trader passing their
+    // own code would otherwise have their ORDER rejected. Skip the attach instead and let the order
+    // proceed unreferred.
     function setTraderReferralCode(address _account, bytes32 _code) external override onlyHandler {
+        if (codeOwners[_code] == _account) { return; }
         _setTraderReferralCode(_account, _code);
     }
 
     // @dev set the referral code for a trader
     // @param _code the referral code to set to
+    // Direct user action, so fail loudly — the caller asked for something invalid and deserves an
+    // error rather than a silent no-op.
     function setTraderReferralCodeByUser(bytes32 _code) external {
+        if (codeOwners[_code] == msg.sender) { revert("ReferralStorage: self-referral"); }
         _setTraderReferralCode(msg.sender, _code);
     }
 
@@ -148,7 +178,8 @@ contract ReferralStorage is IReferralStorage, Governable {
     // @dev get the referral info for a trader
     // @param _account the address of the trader
     function getTraderReferralInfo(address _account) external override view returns (bytes32, address) {
-        bytes32 code = traderReferralCodes[_account];
+        // uses the suppressing getter so a self-referred trader reports no referrer here too
+        bytes32 code = traderReferralCodes(_account);
         address referrer;
         if (code != bytes32(0)) {
             referrer = codeOwners[code];
@@ -160,7 +191,7 @@ contract ReferralStorage is IReferralStorage, Governable {
     // @param _account the address of the trader
     // @param _code the referral code
     function _setTraderReferralCode(address _account, bytes32 _code) private {
-        traderReferralCodes[_account] = _code;
+        _traderReferralCodes[_account] = _code;
         emit SetTraderReferralCode(_account, _code);
     }
 }
