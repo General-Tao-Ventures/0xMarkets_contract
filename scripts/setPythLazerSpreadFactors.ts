@@ -17,15 +17,24 @@ import { bigNumberify, decimalToFloat } from "../utils/math";
 // valuation instead. Leaving it out keeps it at whatever it is already set to.
 // BTC is listed at 1x, which is already the deployed value. Kept in the table so the intent is
 // recorded rather than looking like an omission; the run skips it because nothing changes.
-const FACTOR_BY_FEED_ID: Record<number, number> = {
-  36: 10, // TAO/USD
-  346: 4, // GOLD/USD
-  327: 4, // EUR/USD
-  340: 4, // USD/JPY
-  2: 2, // ETH/USD
-  345: 2, // SILVER/USD
-  333: 2, // GBP/USD
-  1: 1, // BTC/USD
+// Expressed in hundredths so a factor can be fractional: 125 is 1.25x. decimalToFloat takes an
+// integer, so the value is scaled with 2 decimals rather than passed as a JS float.
+//
+// A factor of 1.00 quotes exactly the Pyth confidence band and is the practical floor. Below that
+// the quote sits inside the feed's own uncertainty, taking the other side of moves the feed has
+// not resolved yet. BTC and ETH are already at the floor and cannot be tightened by this table.
+//
+// bps figures below are a round trip at the confidence reading of 2026-08-19 and move with it, so
+// treat them as the shape of the change rather than a guarantee.
+const FACTOR_HUNDREDTHS_BY_FEED_ID: Record<number, number> = {
+  36: 200, // TAO/USD    2.00x  49.40 -> 9.88 bps  (was 10x, by far the widest)
+  346: 150, // GOLD/USD  1.50x   3.38 -> 1.27 bps
+  327: 200, // EUR/USD   2.00x   2.08 -> 1.04 bps
+  340: 200, // USD/JPY   2.00x   1.51 -> 0.76 bps
+  2: 100, // ETH/USD     1.00x   8.66 -> 4.33 bps  (floor)
+  345: 125, // SILVER    1.25x   8.12 -> 5.08 bps
+  333: 125, // GBP/USD   1.25x   2.07 -> 1.29 bps
+  1: 100, // BTC/USD     1.00x   unchanged, already at floor
 };
 
 async function main() {
@@ -36,7 +45,7 @@ async function main() {
 
   const targets: { label: string; address: string; feedId: number; factor: number }[] = [];
   for (const [symbol, token] of Object.entries(tokens)) {
-    const factor = token.pythLazerFeedId ? FACTOR_BY_FEED_ID[token.pythLazerFeedId] : undefined;
+    const factor = token.pythLazerFeedId ? FACTOR_HUNDREDTHS_BY_FEED_ID[token.pythLazerFeedId] : undefined;
     if (factor === undefined) {
       continue;
     }
@@ -46,7 +55,7 @@ async function main() {
     targets.push({ label: symbol, address: token.address, feedId: token.pythLazerFeedId, factor });
   }
 
-  const missing = Object.keys(FACTOR_BY_FEED_ID)
+  const missing = Object.keys(FACTOR_HUNDREDTHS_BY_FEED_ID)
     .map(Number)
     .filter((feedId) => !targets.some((t) => t.feedId === feedId));
   if (missing.length > 0) {
@@ -77,7 +86,7 @@ async function main() {
 
     console.log(
       `${t.label.padEnd(6)} ${t.address}  feed ${String(t.feedId).padStart(3)}  ` +
-        `${current.div(decimalToFloat(1)).toString().padStart(3)}x -> ${t.factor}x`
+        `${(Number(current.toString()) / 1e30).toFixed(2).padStart(5)}x -> ${(t.factor / 100).toFixed(2)}x`
     );
 
     await appendUintConfigIfDifferent(
@@ -85,7 +94,7 @@ async function main() {
       dataCache,
       keys.PYTH_LAZER_FEED_SPREAD_FACTOR,
       keyData,
-      decimalToFloat(t.factor),
+      decimalToFloat(t.factor, 2),
       `pythLazerFeedSpreadFactor ${t.label}`
     );
   }
