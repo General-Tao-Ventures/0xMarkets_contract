@@ -7,6 +7,7 @@ const CONFIG_ADDRESS = "0x2f1D2A3e7aBaf8dde3E8A5e404f468081Cb5cB99";
 const MULTICALL3_ADDRESS = "0x295B86560221c6cb2Bed126Cf6D69cC6aC03e0C4";
 
 const SECONDS_PER_DAY = 86400;
+const SECONDS_PER_YEAR = 31536000;
 
 // ── Helpers ──
 function expandDecimals(n: number | BigNumber, decimals: number): BigNumber {
@@ -75,12 +76,17 @@ const COMMON_PARAMS = {
   positionImpactExponentFactor: expandDecimals(145, 28), // 1.45
   positivePositionImpactFactor: expandDecimals(8, 22), // 0.00000008
   negativePositionImpactFactor: expandDecimals(1, 23), // 0.0000001
-  baseBorrowingFactor: BigNumber.from(0), // 0
-  // 0.000000056 / 86400
-  borrowingFactor: expandDecimals(56, 21).div(SECONDS_PER_DAY),
+  // Kink borrow model (matches borrowingRateConfig_LowMax_WithLowerBase in
+  // config/markets.ts). When optimalUsageFactor != 0, MarketUtils uses
+  // utilization only — equal util ⇒ equal borrow regardless of pool size.
+  // Legacy borrowingFactor / borrowingExponentFactor are ignored on this path.
+  optimalUsageFactor: expandDecimals(75, 28), // 75%
+  // ~10x prior mainnet kink rates (~6%/yr base, ~15%/yr above)
+  baseBorrowingFactor: expandDecimals(60, 28).div(SECONDS_PER_YEAR), // 60%/yr
+  aboveOptimalUsageBorrowingFactor: expandDecimals(150, 28).div(SECONDS_PER_YEAR), // 150%/yr
+  // Unused while kink is enabled; kept so re-running this script doesn't wipe them.
+  borrowingFactor: expandDecimals(56, 21).div(SECONDS_PER_DAY), // 0.000000056 / 86400
   borrowingExponentFactor: expandDecimals(152, 28), // 1.52
-  optimalUsageFactor: BigNumber.from(0), // 0
-  aboveOptimalUsageBorrowingFactor: BigNumber.from(0), // 0
   // 0.000132 / 86400
   fundingFactor: expandDecimals(132, 24).div(SECONDS_PER_DAY),
   fundingExponentFactor: expandDecimals(11, 29), // 1.1
@@ -122,21 +128,20 @@ const CRYPTO_COLLATERAL = {
 };
 
 // Per-class funding rate bounds (min/max funding factor per second)
-const SECONDS_PER_YEAR = 31536000;
-
+// ~0.03% per 8h ≈ 33%/yr (was 90%/yr ≈ 0.082%/8h)
 const FX_FUNDING_RATES = {
   minFundingFactorPerSecond: expandDecimals(1, 28).div(SECONDS_PER_YEAR), // 1%/yr
-  maxFundingFactorPerSecond: expandDecimals(90, 28).div(SECONDS_PER_YEAR), // 90%/yr
+  maxFundingFactorPerSecond: expandDecimals(33, 28).div(SECONDS_PER_YEAR), // 33%/yr
 };
 
 const COMMODITY_FUNDING_RATES = {
   minFundingFactorPerSecond: expandDecimals(1, 28).div(SECONDS_PER_YEAR), // 1%/yr
-  maxFundingFactorPerSecond: expandDecimals(90, 28).div(SECONDS_PER_YEAR), // 90%/yr
+  maxFundingFactorPerSecond: expandDecimals(33, 28).div(SECONDS_PER_YEAR), // 33%/yr
 };
 
 const CRYPTO_FUNDING_RATES = {
   minFundingFactorPerSecond: expandDecimals(1, 28).div(SECONDS_PER_YEAR), // 1%/yr
-  maxFundingFactorPerSecond: expandDecimals(90, 28).div(SECONDS_PER_YEAR), // 90%/yr
+  maxFundingFactorPerSecond: expandDecimals(33, 28).div(SECONDS_PER_YEAR), // 33%/yr
 };
 
 // ── Parameter update entry ──
@@ -440,12 +445,16 @@ async function main() {
   console.log(
     `  negativePositionImpactFactor:        ${COMMON_PARAMS.negativePositionImpactFactor.toString()} (0.0000001)`
   );
-  console.log(`  baseBorrowingFactor:                 ${COMMON_PARAMS.baseBorrowingFactor.toString()} (0)`);
-  console.log(`  borrowingFactor:                     ${COMMON_PARAMS.borrowingFactor.toString()} (0.000000036/day)`);
-  console.log(`  borrowingExponentFactor:             ${COMMON_PARAMS.borrowingExponentFactor.toString()} (1.52)`);
-  console.log(`  optimalUsageFactor:                  ${COMMON_PARAMS.optimalUsageFactor.toString()} (0)`);
+  console.log(`  optimalUsageFactor:                  ${COMMON_PARAMS.optimalUsageFactor.toString()} (75%)`);
+  console.log(`  baseBorrowingFactor:                 ${COMMON_PARAMS.baseBorrowingFactor.toString()} (60%/yr)`);
   console.log(
-    `  aboveOptimalUsageBorrowingFactor:     ${COMMON_PARAMS.aboveOptimalUsageBorrowingFactor.toString()} (0)`
+    `  aboveOptimalUsageBorrowingFactor:     ${COMMON_PARAMS.aboveOptimalUsageBorrowingFactor.toString()} (150%/yr)`
+  );
+  console.log(
+    `  borrowingFactor:                     ${COMMON_PARAMS.borrowingFactor.toString()} (unused; kink enabled)`
+  );
+  console.log(
+    `  borrowingExponentFactor:             ${COMMON_PARAMS.borrowingExponentFactor.toString()} (unused; kink enabled)`
   );
   console.log(`  fundingFactor:                       ${COMMON_PARAMS.fundingFactor.toString()} (0.000000432/day)`);
   console.log(`  fundingExponentFactor:               ${COMMON_PARAMS.fundingExponentFactor.toString()} (1.48)`);
@@ -490,19 +499,19 @@ async function main() {
     `  FX minFundingFactorPerSecond:          ${FX_FUNDING_RATES.minFundingFactorPerSecond.toString()} (1%/yr)`
   );
   console.log(
-    `  FX maxFundingFactorPerSecond:          ${FX_FUNDING_RATES.maxFundingFactorPerSecond.toString()} (90%/yr)`
+    `  FX maxFundingFactorPerSecond:          ${FX_FUNDING_RATES.maxFundingFactorPerSecond.toString()} (33%/yr ~0.03%/8h)`
   );
   console.log(
     `  Commodity minFundingFactorPerSecond:    ${COMMODITY_FUNDING_RATES.minFundingFactorPerSecond.toString()} (1%/yr)`
   );
   console.log(
-    `  Commodity maxFundingFactorPerSecond:    ${COMMODITY_FUNDING_RATES.maxFundingFactorPerSecond.toString()} (90%/yr)`
+    `  Commodity maxFundingFactorPerSecond:    ${COMMODITY_FUNDING_RATES.maxFundingFactorPerSecond.toString()} (33%/yr ~0.03%/8h)`
   );
   console.log(
     `  Crypto minFundingFactorPerSecond:       ${CRYPTO_FUNDING_RATES.minFundingFactorPerSecond.toString()} (1%/yr)`
   );
   console.log(
-    `  Crypto maxFundingFactorPerSecond:       ${CRYPTO_FUNDING_RATES.maxFundingFactorPerSecond.toString()} (90%/yr)`
+    `  Crypto maxFundingFactorPerSecond:       ${CRYPTO_FUNDING_RATES.maxFundingFactorPerSecond.toString()} (33%/yr ~0.03%/8h)`
   );
 
   if (!write) {

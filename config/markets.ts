@@ -311,8 +311,9 @@ type BorrowingRateConfig = Partial<{
 
 const borrowingRateConfig_LowMax_WithLowerBase: BorrowingRateConfig = {
   optimalUsageFactor: percentageToFloat("75%"),
-  baseBorrowingFactor: percentageToFloat("45%").div(SECONDS_PER_YEAR),
-  aboveOptimalUsageBorrowingFactor: percentageToFloat("100%").div(SECONDS_PER_YEAR),
+  // ~10x prior mainnet kink rates (~6%/yr base, ~15%/yr above)
+  baseBorrowingFactor: percentageToFloat("60%").div(SECONDS_PER_YEAR),
+  aboveOptimalUsageBorrowingFactor: percentageToFloat("150%").div(SECONDS_PER_YEAR),
 };
 const borrowingRateConfig_LowMax_WithHigherBase: BorrowingRateConfig = {
   optimalUsageFactor: percentageToFloat("75%"),
@@ -381,20 +382,25 @@ const baseMarketConfig: Partial<BaseMarketConfig> = {
 
   minCollateralUsd: decimalToFloat(1, 0), // 1 USD
 
+  // Legacy curve-model keys (unused when optimalUsageFactor != 0). Kept for
+  // backwards-compatible reads / validators; kink params below drive the rate.
   borrowingFactor: exponentToFloat("3.6e-8").div(SECONDS_PER_DAY), // 0.000000036 / 86400 per second
-
-  optimalUsageFactor: 0,
-  baseBorrowingFactor: 0,
-  aboveOptimalUsageBorrowingFactor: 0, // kink disabled (optimalUsageFactor=0); validator caps the raw value at 1e23, so any larger sentinel reverts
-
   borrowingExponentFactor: exponentToFloat("1.52e0"),
+
+  // Kink borrow model: rate is a function of utilization only
+  // (reservedUsd / (poolUsd * openInterestReserveFactor)), so equal util on
+  // small vs large pools produces the same borrow rate. Skew is handled by
+  // skipBorrowingFeeForSmallerSide (lighter side pays 0).
+  ...borrowingRateConfig_LowMax_WithLowerBase,
 
   fundingFactor: exponentToFloat("4.32e-7").div(SECONDS_PER_DAY), // 0.000000432 / 86400 per second
   fundingExponentFactor: exponentToFloat("1.48e0"),
 
   minFundingFactorPerSecond: percentageToFloat("1%").div(SECONDS_PER_YEAR),
-  maxFundingFactorPerSecond: percentageToFloat("90%").div(SECONDS_PER_YEAR), // ~0.246% per day
-  fundingIncreaseFactorPerSecond: percentageToFloat("90%")
+  // ~0.03% per 8h (was ~0.082% at 90%/yr). ~2.5x cut from prior 90%/yr cap.
+  maxFundingFactorPerSecond: percentageToFloat("33%").div(SECONDS_PER_YEAR),
+  // Reach the (new) max at 100% imbalance in ~3 hours — same ramp time as before.
+  fundingIncreaseFactorPerSecond: percentageToFloat("33%")
     .div(SECONDS_PER_YEAR)
     .div(SECONDS_PER_HOUR * 3),
   fundingDecreaseFactorPerSecond: decimalToFloat(0), // not applicable if thresholdForDecreaseFunding = 0
@@ -548,11 +554,10 @@ const baseMainnetMarketConfig: Partial<BaseMarketConfig> = {
 
   minCollateralUsd: decimalToFloat(5, 0),
 
-  aboveOptimalUsageBorrowingFactor: 0,
-  baseBorrowingFactor: 0,
-  optimalUsageFactor: 0,
+  // Legacy curve-model keys unused while kink is enabled (see baseMarketConfig).
   borrowingFactor: exponentToFloat("5.6e-10").div(SECONDS_PER_DAY),
   borrowingExponentFactor: exponentToFloat("1.73e0"),
+  ...borrowingRateConfig_LowMax_WithLowerBase,
 
   minLeverage: decimalToFloat(1),
   minMmr: percentageToFloat("1%"),
