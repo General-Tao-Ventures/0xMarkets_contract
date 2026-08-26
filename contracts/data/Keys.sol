@@ -109,6 +109,11 @@ library Keys {
     // @dev key for the account order list
     bytes32 public constant ACCOUNT_ORDER_LIST = keccak256(abi.encode("ACCOUNT_ORDER_LIST"));
 
+    // @dev prefix for the count of an account's pending orders in a market
+    bytes32 public constant ACCOUNT_ORDER_COUNT_FOR_MARKET = keccak256(abi.encode("ACCOUNT_ORDER_COUNT_FOR_MARKET"));
+    // @dev max number of pending orders an account can hold in a single market (0 disables the cap)
+    bytes32 public constant MAX_ACCOUNT_ORDER_COUNT_FOR_MARKET = keccak256(abi.encode("MAX_ACCOUNT_ORDER_COUNT_FOR_MARKET"));
+
     // @dev key for the subaccount list
     bytes32 public constant SUBACCOUNT_LIST = keccak256(abi.encode("SUBACCOUNT_LIST"));
 
@@ -617,6 +622,13 @@ library Keys {
     // @param account the account for the list
     function accountOrderListKey(address account) internal pure returns (bytes32) {
         return keccak256(abi.encode(ACCOUNT_ORDER_LIST, account));
+    }
+
+    // @dev key for the count of an account's pending orders in a market
+    // @param account the account
+    // @param market the market
+    function accountOrderCountForMarketKey(address account, address market) internal pure returns (bytes32) {
+        return keccak256(abi.encode(ACCOUNT_ORDER_COUNT_FOR_MARKET, account, market));
     }
 
     // @dev key for the subaccount list

@@ -75,6 +75,23 @@ library OrderUtils {
     ) external returns (bytes32) {
         AccountUtils.validateAccount(account);
 
+        // The min-execution-fee that would normally rate-limit order creation is waived here (see the
+        // execution fee exemption below), so cap how many pending orders one account can hold in a
+        // single market. Checked before any collateral is pulled so a spam order fails cheaply.
+        // 0 disables the cap.
+        uint256 maxOrderCount = dataStore.getUint(Keys.MAX_ACCOUNT_ORDER_COUNT_FOR_MARKET);
+        if (maxOrderCount > 0) {
+            uint256 orderCount = dataStore.getUint(Keys.accountOrderCountForMarketKey(account, params.addresses.market));
+            if (orderCount >= maxOrderCount) {
+                revert Errors.MaxAccountOrderCountForMarketExceeded(
+                    account,
+                    params.addresses.market,
+                    orderCount,
+                    maxOrderCount
+                );
+            }
+        }
+
         ReferralUtils.setTraderReferralCode(referralStorage, account, params.referralCode);
 
         CreateOrderCache memory cache;

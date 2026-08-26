@@ -142,6 +142,16 @@ library OrderStoreUtils {
     }
 
     function set(DataStore dataStore, bytes32 key, Order.Props memory order) external {
+        // a genuinely new order (not a freeze/update re-store of an existing key) bumps the
+        // per-market count. this covers user orders and protocol-created liquidation/ADL orders
+        // alike, so the count stays in step with the decrement in remove().
+        if (!dataStore.containsBytes32(Keys.ORDER_LIST, key)) {
+            dataStore.incrementUint(
+                Keys.accountOrderCountForMarketKey(order.account(), order.market()),
+                1
+            );
+        }
+
         dataStore.addBytes32(
             Keys.ORDER_LIST,
             key
@@ -271,6 +281,16 @@ library OrderStoreUtils {
     function remove(DataStore dataStore, bytes32 key, address account) external {
         if (!dataStore.containsBytes32(Keys.ORDER_LIST, key)) {
             revert Errors.OrderNotFound(key);
+        }
+
+        // keep the per-market order count in step with removals. saturating: orders created before
+        // the cap existed were never counted, so guard against underflow on their removal.
+        bytes32 orderCountKey = Keys.accountOrderCountForMarketKey(
+            account,
+            dataStore.getAddress(keccak256(abi.encode(key, MARKET)))
+        );
+        if (dataStore.getUint(orderCountKey) > 0) {
+            dataStore.decrementUint(orderCountKey, 1);
         }
 
         dataStore.removeBytes32(

@@ -43,6 +43,7 @@ export const ACCOUNT_POSITION_LIST = hashString("ACCOUNT_POSITION_LIST");
 
 export const ORDER_LIST = hashString("ORDER_LIST");
 export const ACCOUNT_ORDER_LIST = hashString("ACCOUNT_ORDER_LIST");
+export const ACCOUNT_ORDER_COUNT_FOR_MARKET = hashString("ACCOUNT_ORDER_COUNT_FOR_MARKET");
 
 export const SUBACCOUNT_LIST = hashString("SUBACCOUNT_LIST");
 
@@ -83,6 +84,7 @@ export const MAX_UI_FEE_FACTOR = hashString("MAX_UI_FEE_FACTOR");
 export const MIN_AFFILIATE_REWARD_FACTOR = hashString("MIN_AFFILIATE_REWARD_FACTOR");
 
 export const MAX_AUTO_CANCEL_ORDERS = hashString("MAX_AUTO_CANCEL_ORDERS");
+export const MAX_ACCOUNT_ORDER_COUNT_FOR_MARKET = hashString("MAX_ACCOUNT_ORDER_COUNT_FOR_MARKET");
 export const MAX_TOTAL_CALLBACK_GAS_LIMIT_FOR_AUTO_CANCEL_ORDERS = hashString(
   "MAX_TOTAL_CALLBACK_GAS_LIMIT_FOR_AUTO_CANCEL_ORDERS"
 );
@@ -318,6 +320,10 @@ export function accountPositionListKey(account) {
 
 export function accountOrderListKey(account) {
   return hashData(["bytes32", "address"], [ACCOUNT_ORDER_LIST, account]);
+}
+
+export function accountOrderCountForMarketKey(account, market) {
+  return hashData(["bytes32", "address", "address"], [ACCOUNT_ORDER_COUNT_FOR_MARKET, account, market]);
 }
 
 export function subaccountListKey(account) {
